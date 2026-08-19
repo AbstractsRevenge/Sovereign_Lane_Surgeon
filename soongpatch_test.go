@@ -18,6 +18,8 @@ package main
 import (
 	"encoding/json"
 	"go/format"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -188,5 +190,67 @@ func isFrameworkResClassName(name string) bool {
 	out2, changed2, _ := appendFrameworkResCase(out, "t1")
 	if changed2 || string(out2) != string(out) {
 		t.Error("second append should be a no-op")
+	}
+}
+
+// --- v0.3.0: lane-name collision guard + drop-list inheritance ---
+
+// The name IS a finder path predicate, so a name any existing directory already ends with makes
+// every lane blind to those directories.
+func TestCheckLaneSuffixCollision(t *testing.T) {
+	root := t.TempDir()
+	for _, d := range []string{
+		"prebuilts/misc/common/androidx-test",
+		"external/kotlinx.coroutines/kotlinx-coroutines-test",
+		"frameworks-holotest/base", // the lane's OWN root must never count against it
+		"packages-holotest/apps",
+		"external/guava",
+	} {
+		if err := os.MkdirAll(filepath.Join(root, d), 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	off, total := checkLaneSuffixCollision(root, "test")
+	if total != 2 {
+		t.Errorf("want 2 colliding dirs for %q, got %d (%v)", "test", total, off)
+	}
+	if _, total := checkLaneSuffixCollision(root, "holotest"); total != 0 {
+		t.Errorf("lane's own roots must not count as collisions, got %d", total)
+	}
+}
+
+// A lane-sourced fork inherits the source lane's directory RELOCATIONS, which cannot be derived
+// from the new lane's tree. Lane-own entries are remapped; stock entries carry over verbatim.
+func TestInheritDropsFromLane(t *testing.T) {
+	root := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(root, ".holo"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	src := `{"dropped_namespace_decl_paths":[
+	  "frameworks/hardware/interfaces/stats/aidl/vts/java/Android.bp",
+	  "packages-holo/system/secretkeeper/client/Android.bp",
+	  "frameworks-holo/ex/camera2/extensions/Android.bp",
+	  "bootable/deprecated-ota/Android.bp"
+	]}`
+	if err := os.WriteFile(filepath.Join(root, ".holo", "holo_bp_route_manifest.json"), []byte(src), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	got, err := inheritDropsFromLane("holo", "holotest", root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := map[string]bool{
+		"frameworks/hardware/interfaces/stats/aidl/vts/java/Android.bp": true, // stock: verbatim
+		"packages-holotest/system/secretkeeper/client/Android.bp":       true, // lane-own: remapped
+		"frameworks-holotest/ex/camera2/extensions/Android.bp":          true, // lane-own: remapped
+		"bootable/deprecated-ota/Android.bp":                            true, // stock: verbatim
+	}
+	if len(got) != len(want) {
+		t.Fatalf("got %d entries, want %d: %v", len(got), len(want), got)
+	}
+	for _, g := range got {
+		if !want[g] {
+			t.Errorf("unexpected entry %q", g)
+		}
 	}
 }

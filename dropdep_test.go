@@ -38,7 +38,7 @@ func TestDropDepBp(t *testing.T) {
 }
 `
 	drop := map[string]bool{
-		"//frameworks-nexusm/libs/systemui:animationlib":                        true,
+		"//frameworks-nexusm/libs/systemui:animationlib":                          true,
 		"//frameworks-nexusm/libs/systemui:com_android_systemui_shared_flags_lib": true,
 	}
 	out, changed, err := dropDepsBp([]byte(src), drop)

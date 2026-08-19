@@ -35,6 +35,7 @@ type LaneConfig struct {
 	Forks       []string // stock subtrees to clone into the lane tree (frameworks/..., packages/...)
 	ForkExclude []string // subpaths to LEAVE stock inside a fork (namespace-complex, e.g. frameworks/base/packages/SystemUI)
 	DirPrefix   string   // physical directory prefix when KeepName is false (e.g. NexusM)
+	FromLane    string   // source LANE to fork from (e.g. "holo") instead of stock; "" = stock fork
 	NoCompose   bool     // OPTIONAL experimental premise: bypass AndroidX/Compose (Nexus-Modern style —
 	//              exclude/leave-stock the Compose/AndroidX/Jetpack subtrees, auto-drop their dep
 	//              refs, and scope SystemUI-class srcs to the re-authored View-in-Kotlin kotlin/ tree).

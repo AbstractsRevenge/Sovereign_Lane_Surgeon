@@ -101,3 +101,94 @@ func TestPatchExistingOtherLaneFuncs(t *testing.T) {
 		t.Error("kotlinc-holo carve-out lost")
 	}
 }
+
+// --- v0.3.0: self-drop exclusion + neverallow lane paths ---
+
+func TestExcludeLaneFromStockDrop(t *testing.T) {
+	const stub = `package build
+
+func x(ctx Context, config Config, androidBps []string) {
+	if !isNexusmLane(config) && !isProductProduct(config) {
+		androidBps = dropNonHoloLaneBps(androidBps)
+	}
+	if len(androidBps) == 0 {
+		ctx.Fatalf("No Android.bp found")
+	}
+}
+`
+	out, ch, err := excludeLaneFromStockDrop([]byte(stub), "Holotest")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !ch {
+		t.Fatal("expected the guard to be amended")
+	}
+	if !strings.Contains(string(out), `!isProductProduct(config) && !isHolotestLane(config) {`) {
+		t.Errorf("splice landed wrong:\n%s", out)
+	}
+	out2, ch2, err := excludeLaneFromStockDrop(out, "Holotest")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if ch2 || strings.Count(string(out2), "isHolotestLane(config)") != 1 {
+		t.Error("second run must be a no-op")
+	}
+}
+
+// A finder with no stock-drop guard has nothing to exclude the lane from. It must report that
+// rather than corrupt anything — the caller soft-skips.
+func TestExcludeLaneFromStockDropNoGuard(t *testing.T) {
+	const stub = `package build
+
+func x(androidBps []string) { _ = androidBps }
+`
+	if _, _, err := excludeLaneFromStockDrop([]byte(stub), "Holotest"); err == nil {
+		t.Error("expected an error naming the missing guard")
+	}
+}
+
+// The rule is "every stock allowlist path gets a lane twin" — covering a named []string var and
+// an inline NotIn(...) arg list, the two shapes neverallow.go actually uses.
+func TestPatchNeverallowLanePaths(t *testing.T) {
+	const stub = `package android
+
+func rules() {
+	javaDeviceForHostProjectsAllowedList := []string{
+		"external/guava",
+		"frameworks/base/ravenwood",
+		"frameworks/layoutlib",
+	}
+	_ = javaDeviceForHostProjectsAllowedList
+	_ = NeverAllow().NotIn("frameworks/native/libs/binder/ndk").Because("x")
+}
+`
+	out, ch, err := PatchNeverallowLanePaths([]byte(stub), "holotest")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !ch {
+		t.Fatal("expected changes")
+	}
+	s := string(out)
+	for _, want := range []string{
+		`"frameworks-holotest/base/ravenwood"`,
+		`"frameworks-holotest/layoutlib"`,
+		`"frameworks-holotest/native/libs/binder/ndk"`,
+	} {
+		if !strings.Contains(s, want) {
+			t.Errorf("missing %s in:\n%s", want, s)
+		}
+	}
+	// non-frameworks/packages entries are left alone
+	if strings.Contains(s, "external-holotest") {
+		t.Error("must only mirror frameworks/ and packages/ roots")
+	}
+	// idempotent
+	out2, ch2, err := PatchNeverallowLanePaths(out, "holotest")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if ch2 || strings.Count(string(out2), `"frameworks-holotest/layoutlib"`) != 1 {
+		t.Error("second run must be a no-op")
+	}
+}

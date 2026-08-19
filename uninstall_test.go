@@ -16,6 +16,8 @@
 package main
 
 import (
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -65,5 +67,57 @@ func alsoKeep() {}
 	}
 	if _, ch, _ := removeDeclByName(out, "dropMe"); ch {
 		t.Error("removing absent decl should be a no-op")
+	}
+}
+
+// --- v0.3.0: uninstall -target splits trees from patches ---
+
+// A full uninstall discards the lane CLONE, which for a real lane is multi-GB and minutes to
+// rebuild. -target patches reverts the registration while keeping the trees, so a lane can be
+// re-seeded (renamed, re-registered) without re-cloning; -target lanes is the converse.
+func TestUninstallTargetSplit(t *testing.T) {
+	seed := func(t *testing.T) string {
+		root := t.TempDir()
+		for _, d := range []string{"frameworks-zed/base", "packages-zed/apps", ".zed"} {
+			if err := os.MkdirAll(filepath.Join(root, d), 0o755); err != nil {
+				t.Fatal(err)
+			}
+		}
+		p := filepath.Join(root, "device/generic/goldfish/64bitonly/product")
+		if err := os.MkdirAll(p, 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(p, "sdk_phone64_zed.mk"), []byte("x\n"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		return root
+	}
+	treesGone := func(root string) bool {
+		for _, d := range []string{"frameworks-zed", "packages-zed", ".zed",
+			"device/generic/goldfish/64bitonly/product/sdk_phone64_zed.mk"} {
+			if _, err := os.Stat(filepath.Join(root, d)); err == nil {
+				return false
+			}
+		}
+		return true
+	}
+	c := deriveLane("zed", true, nil, false, false, "")
+
+	root := seed(t)
+	uninstallLane(c, root, "patches")
+	if treesGone(root) {
+		t.Error("-target patches must KEEP the lane trees")
+	}
+
+	root = seed(t)
+	uninstallLane(c, root, "lanes")
+	if !treesGone(root) {
+		t.Error("-target lanes must remove the lane trees")
+	}
+
+	root = seed(t)
+	uninstallLane(c, root, "all")
+	if !treesGone(root) {
+		t.Error("-target all must remove the lane trees")
 	}
 }

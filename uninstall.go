@@ -309,38 +309,67 @@ func cleanAndroidProducts(outRoot, rel, lane string) {
 	os.Remove(p + ".sld-bak")
 }
 
-// uninstallLane reverses a create+apply for the lane.
-func uninstallLane(c LaneConfig, outRoot string) int {
-	fmt.Printf("uninstall lane %q from %s:\n", c.Name, outRoot)
-	// 1. lane dirs + device dirs
-	dirs := []string{"frameworks-" + c.Name, "packages-" + c.Name, "." + c.Name}
-	devMatches, _ := filepath.Glob(filepath.Join(outRoot, "device", "google", "*-"+c.Name))
-	for _, m := range devMatches {
-		dirs = append(dirs, strings.TrimPrefix(m, outRoot+string(os.PathSeparator)))
+// uninstallLane reverses a create+apply for the lane. target selects how much:
+//
+//	"patches" — soong/make patches only. The lane TREES are left on disk, so the lane can be
+//	            re-registered without re-cloning. Use when re-seeding (e.g. renaming a lane) —
+//	            a full uninstall discards a multi-GB clone that takes minutes to rebuild and
+//	            may hold hand-edits.
+//	"lanes"   — lane trees + products only, leaving the patches in place.
+//	"all"     — both (the historical behavior, and the default).
+//
+// NOTE the standing hazard between them: lane trees on disk with the patches REVERTED is fine
+// (nothing routes to them), but trees on disk while a SIBLING lane's isOtherLaneBp still names
+// this suffix is also fine — it is the reverse (trees present, this lane's suffix NOT registered
+// in the siblings' predicates) that lets a sibling load these bps and collide on keep-name twins.
+// "patches" leaves the cross-cut in place precisely so that gap never opens.
+func uninstallLane(c LaneConfig, outRoot string, target string) int {
+	if target == "" {
+		target = "all"
 	}
-	for _, d := range dirs {
-		abs := filepath.Join(outRoot, d)
-		if _, err := os.Stat(abs); err == nil {
-			os.RemoveAll(abs)
-			fmt.Printf("  - removed %s/\n", d)
+	doTrees := target == "all" || target == "lanes"
+	doPatches := target == "all" || target == "patches"
+	fmt.Printf("uninstall lane %q from %s (target=%s):\n", c.Name, outRoot, target)
+	if doTrees {
+		// 1. lane dirs + device dirs
+		dirs := []string{"frameworks-" + c.Name, "packages-" + c.Name, "." + c.Name}
+		devMatches, _ := filepath.Glob(filepath.Join(outRoot, "device", "google", "*-"+c.Name))
+		for _, m := range devMatches {
+			dirs = append(dirs, strings.TrimPrefix(m, outRoot+string(os.PathSeparator)))
 		}
-	}
-	// 2. shared goldfish + cuttlefish products
-	for _, p := range []string{
-		"device/generic/goldfish/64bitonly/product/sdk_phone64_" + c.Name + ".mk",
-		"device/generic/goldfish/64bitonly/product/sdk_tablet_" + c.Name + ".mk",
-		"device/google/cuttlefish/vsoc_x86_64/phone/aosp_cf_" + c.Name + ".mk",
-		"device/google/cuttlefish/vsoc_x86_64/phone/aosp_cf_tablet_" + c.Name + ".mk",
-	} {
-		abs := filepath.Join(outRoot, p)
-		if _, err := os.Stat(abs); err == nil {
-			os.Remove(abs)
-			fmt.Printf("  - removed %s\n", p)
+		for _, d := range dirs {
+			abs := filepath.Join(outRoot, d)
+			if _, err := os.Stat(abs); err == nil {
+				os.RemoveAll(abs)
+				fmt.Printf("  - removed %s/\n", d)
+			}
 		}
+		// 2. shared goldfish + cuttlefish products
+		for _, p := range []string{
+			"device/generic/goldfish/64bitonly/product/sdk_phone64_" + c.Name + ".mk",
+			"device/generic/goldfish/64bitonly/product/sdk_tablet_" + c.Name + ".mk",
+			"device/google/cuttlefish/vsoc_x86_64/phone/aosp_cf_" + c.Name + ".mk",
+			"device/google/cuttlefish/vsoc_x86_64/phone/aosp_cf_tablet_" + c.Name + ".mk",
+		} {
+			abs := filepath.Join(outRoot, p)
+			if _, err := os.Stat(abs); err == nil {
+				os.Remove(abs)
+				fmt.Printf("  - removed %s\n", p)
+			}
+		}
+		// 3. shared AndroidProducts.mk (surgical, multi-lane-safe). Product REGISTRATION, so it
+		// belongs with the trees: leaving it while the products are gone would register a
+		// nonexistent product; removing it while the products remain would orphan them.
+		cleanAndroidProducts(outRoot, "device/generic/goldfish/AndroidProducts.mk", c.Name)
+		cleanAndroidProducts(outRoot, "device/google/cuttlefish/AndroidProducts.mk", c.Name)
+	} else {
+		fmt.Printf("  = lane trees KEPT (frameworks-%s/, packages-%s/, .%s/, products)\n", c.Name, c.Name, c.Name)
 	}
-	// 3. shared AndroidProducts.mk (surgical, multi-lane-safe)
-	cleanAndroidProducts(outRoot, "device/generic/goldfish/AndroidProducts.mk", c.Name)
-	cleanAndroidProducts(outRoot, "device/google/cuttlefish/AndroidProducts.mk", c.Name)
+	if !doPatches {
+		fmt.Printf("  = soong/make patches KEPT — the lane stays registered.\n")
+		fmt.Println("uninstall complete.")
+		return 0
+	}
 	// 4. soong patches (inverse AST)
 	camel := c.CamelCase
 	applyGoEdit(outRoot, "build/soong/java/aar.go",
@@ -374,10 +403,20 @@ func cmdUninstall(args []string) int {
 	fs := flag.NewFlagSet("uninstall", flag.ExitOnError)
 	out := fs.String("out", "", "AOSP root to reverse the lane from")
 	name := fs.String("name", "", "lane name to uninstall")
+	target := fs.String("target", "all", "what to remove: all | patches | lanes.\n"+
+		"  all     — trees + products + soong/make patches (full reversal)\n"+
+		"  patches — soong/make patches ONLY; the lane trees stay on disk (re-seed without re-cloning)\n"+
+		"  lanes   — lane trees + products ONLY; the patches stay registered")
 	_ = fs.Parse(args)
 	if *out == "" || *name == "" {
 		fmt.Fprintln(os.Stderr, "uninstall: -name <lane> and -out <aosp-root> are required")
 		return 2
 	}
-	return uninstallLane(deriveLane(*name, true, nil, false, false, ""), *out)
+	switch *target {
+	case "all", "patches", "lanes":
+	default:
+		fmt.Fprintf(os.Stderr, "uninstall: -target must be all|patches|lanes (got %q)\n", *target)
+		return 2
+	}
+	return uninstallLane(deriveLane(*name, true, nil, false, false, ""), *out, *target)
 }

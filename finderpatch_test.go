@@ -16,6 +16,7 @@
 package main
 
 import (
+	"go/format"
 	"go/parser"
 	"go/token"
 	"strings"
@@ -102,13 +103,13 @@ func TestGenFinderModelAware(t *testing.T) {
 	// Model-A rename now does PER-FILE stock-parallel replacement WITH the identity-app de-prefix
 	// (formerly the rename model was finder-inert: drop-other-lane + manifest only).
 	for _, want := range []string{
-		"RENAME / Model-A hybrid",                                   // marker
-		"func existingAuroraStockParallel(bp string) string",       // de-prefixing stock-parallel helper
-		"func deprefixAuroraIdentitySegment(path string) string",   // identity-segment de-prefix
-		`const prefix = "AuroraM"`,                                  // DirPrefix threaded through
-		"func auroraForkKeepsStock(bp string) bool",                // additive short-circuit
-		"func auroraBpDefinesTopLevelVariable(path string) bool",   // var-guard
-		"toDrop[mapped] = true",                                    // per-file replacement
+		"RENAME / Model-A hybrid",                                // marker
+		"func existingAuroraStockParallel(bp string) string",     // de-prefixing stock-parallel helper
+		"func deprefixAuroraIdentitySegment(path string) string", // identity-segment de-prefix
+		`const prefix = "AuroraM"`,                               // DirPrefix threaded through
+		"func auroraForkKeepsStock(bp string) bool",              // additive short-circuit
+		"func auroraBpDefinesTopLevelVariable(path string) bool", // var-guard
+		"toDrop[mapped] = true",                                  // per-file replacement
 	} {
 		if !strings.Contains(rblock, want) {
 			t.Errorf("rename block missing %q", want)
@@ -184,5 +185,29 @@ func TestDeriveOtherLaneSuffixes(t *testing.T) {
 	got2, _ := deriveOtherLaneSuffixes([]byte(isLaneLunchSample), "nexusm")
 	if strings.Join(got2, ",") != "-holo,-nexus" {
 		t.Errorf("nexusm: got %v want [-holo -nexus]", got2)
+	}
+}
+
+// The keep-name apply must carry the namespace-collapse branch AND emit the predicate it calls.
+// Without the branch a lane subtree keeps its own soong_namespace and stock consumers stop
+// resolving its modules by bare name; without the predicate the generated finder does not compile.
+func TestKeepNameApplyEmitsNamespaceCollapse(t *testing.T) {
+	c := deriveLane("zed", true, nil, false, false, "")
+	block, err := genFinderLaneFuncs(c, []string{"-holo"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{
+		"bpDeclaresNamespace(bp) && !isZedOwnedNamespaceBp(bp)",
+		"func isZedOwnedNamespaceBp(bp string) bool",
+		`strings.Contains(bp, "/pods/")`,
+	} {
+		if !strings.Contains(block, want) {
+			t.Errorf("keep-name block missing %q", want)
+		}
+	}
+	// the emitted block must be valid Go (it is spliced into finder.go)
+	if _, err := format.Source([]byte("package build\n\n" + block)); err != nil {
+		t.Errorf("generated keep-name block does not compile: %v", err)
 	}
 }

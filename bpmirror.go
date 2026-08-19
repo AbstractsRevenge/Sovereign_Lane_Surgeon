@@ -318,11 +318,69 @@ func mergeDedup(a, b []string) []string {
 	return out
 }
 
-// laneDirFor maps a stock subtree under frameworks/ or packages/ to its lane-dir parallel.
-func laneDirFor(stockSubtree, lane string) (laneRel string, ok bool) {
+// checkLaneSuffixCollision reports existing directories whose NAME ends in "-<lane>". Such a
+// directory is indistinguishable from lane content to the finder's suffix predicates, so every
+// lane in the tree would stop scanning it.
+//
+// This is not hypothetical. A lane named "test" makes isOtherLaneBp drop every directory ending
+// in "-test" — 107 of them in AOSP, 15 carrying an Android.bp, including
+// prebuilts/misc/common/androidx-test. The symptom is remote from the cause: unrelated lanes fail
+// with "depends on undefined module androidx.test.core" from external/robolectric, and nothing in
+// that error mentions the new lane. The name is the defect, and it must be rejected before any
+// file is written, because by the time a build says otherwise the tree already holds a multi-GB
+// clone and patched shared soong sources.
+//
+// Returns offenders (capped) and the total count. Skips out*/.git/.repo and the lane's own roots.
+func checkLaneSuffixCollision(outRoot, lane string) (offenders []string, total int) {
+	suffix := "-" + lane
+	ownFw, ownPkg := "frameworks"+suffix, "packages"+suffix
+	for _, top := range []string{"frameworks", "packages", "external", "prebuilts", "system", "device", "build", "art", "libcore", "tools", "cts", "development", "hardware", "bootable", "vendor"} {
+		root := filepath.Join(outRoot, top)
+		if fi, err := os.Stat(root); err != nil || !fi.IsDir() {
+			continue
+		}
+		filepath.Walk(root, func(p string, fi os.FileInfo, e error) error {
+			if e != nil || !fi.IsDir() {
+				return nil
+			}
+			base := filepath.Base(p)
+			if base == ".git" || base == ".repo" || strings.HasPrefix(base, "out") && filepath.Dir(p) == outRoot {
+				return filepath.SkipDir
+			}
+			if base == ownFw || base == ownPkg {
+				return filepath.SkipDir
+			}
+			if strings.HasSuffix(base, suffix) {
+				total++
+				if len(offenders) < 8 {
+					rel, _ := filepath.Rel(outRoot, p)
+					offenders = append(offenders, rel)
+				}
+			}
+			return nil
+		})
+	}
+	return offenders, total
+}
+
+// laneDirFor maps a fork-source subtree to its lane-dir parallel. The source may be stock
+// (frameworks/base) or ANOTHER LANE (frameworks-holo/base) — a lane-sourced fork seeds the new
+// lane from a proven lane instead of stock, so it inherits that lane's UX rather than re-deriving
+// it. Only the FIRST path segment is rewritten, and it is replaced whole: a naive
+// strings.Replace(p, "frameworks", ...) turns "frameworks-holo/base" into "frameworks-test-holo/base".
+// Matching the whole segment is also what keeps this separator-aware.
+//
+// NOTE: a lane-sourced clone is verbatim (keep-name, no ref rewrite), so the source lane's
+// qualified //frameworks-<src>/… labels come across pointing at the SOURCE lane — which the new
+// lane's finder drops. Run `requalify -name <new> -from <src>` after the mirror to repoint them.
+func laneDirFor(srcSubtree, lane string) (laneRel string, ok bool) {
+	seg, tail := srcSubtree, ""
+	if i := strings.IndexByte(srcSubtree, '/'); i >= 0 {
+		seg, tail = srcSubtree[:i], srcSubtree[i:]
+	}
 	for _, root := range []string{"frameworks", "packages"} {
-		if stockSubtree == root || strings.HasPrefix(stockSubtree, root+"/") {
-			return strings.Replace(stockSubtree, root, root+"-"+lane, 1), true
+		if seg == root || strings.HasPrefix(seg, root+"-") {
+			return root + "-" + lane + tail, true
 		}
 	}
 	return "", false

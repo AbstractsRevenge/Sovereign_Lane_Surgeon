@@ -552,6 +552,20 @@ func copyDeviceFamilyTree(c LaneConfig, outRoot, family string) (copied, dropped
 		if atRoot && (isStockProductMk(base) || base == "Android.bp" || base == "NOTICE") {
 			return nil
 		}
+		// BOARD subdirs are excluded — they must stay unique per TARGET_DEVICE.
+		//
+		// board_config.mk locates the board by GLOB, not by product path:
+		//   find -L device -maxdepth 4 -path '*/$(TARGET_DEVICE)/BoardConfig.mk'
+		// and the lane's product keeps the stock PRODUCT_DEVICE (`panther`, not `panther_<lane>`).
+		// So a copied device/google/<family>-<lane>/panther/BoardConfig.mk matches that glob for
+		// EVERY panther product — stock and lane alike — and kati aborts with
+		// "Multiple board config files for TARGET_DEVICE panther". The lane shares the stock board;
+		// only the product mks are lane-specific.
+		if fi.IsDir() {
+			if _, berr := os.Stat(filepath.Join(p, "BoardConfig.mk")); berr == nil {
+				return filepath.SkipDir
+			}
+		}
 		target := filepath.Join(dstRoot, rel)
 		if fi.IsDir() {
 			return os.MkdirAll(target, 0o755)

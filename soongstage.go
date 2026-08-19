@@ -89,6 +89,23 @@ func stageSoongPatches(c LaneConfig, outRoot string) (staged int, fatal bool) {
 	}
 	targets = append(targets, soongTarget{visRel, visOut, vChanged})
 
+	// neverallow.go: allowlist the lane's ravenwood/layoutlib paths. Only relevant when the lane
+	// forks frameworks/base, but harmless (and forward-proof) otherwise — the entries simply go
+	// unused. Soft-skipped if the file or the list is absent on this AOSP version.
+	nevRel := filepath.Join("build", "soong", "android", "neverallow.go")
+	var nevSrc []byte
+	nevStaged := false
+	if ns, nerr := readStagedOrLive(outRoot, nevRel); nerr == nil {
+		nevSrc = ns
+		nevOut, nChanged, perr := PatchNeverallowLanePaths(nevSrc, c.Name)
+		if perr != nil {
+			fmt.Fprintf(os.Stderr, "  ! patch neverallow.go: %v\n", perr)
+			return 0, true
+		}
+		targets = append(targets, soongTarget{nevRel, nevOut, nChanged})
+		nevStaged = true
+	}
+
 	suffixes, err := deriveOtherLaneSuffixes(aarSrc, c.Name)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "  ! derive other-lane suffixes: %v\n", err)
@@ -114,7 +131,21 @@ func stageSoongPatches(c LaneConfig, outRoot string) (staged int, fatal bool) {
 		fmt.Fprintf(os.Stderr, "  ! cross-cut other-lane funcs: %v\n", err)
 		return 0, true
 	}
-	targets = append(targets, soongTarget{finRel, finOut, f1 || f2 || !bytesEqual(finOut, finSrc)})
+	// MUST follow the cross-cut: that step is what makes isOtherLaneBp match this lane's suffix,
+	// which is what would otherwise make the lane drop its own bp before its routes run.
+	// NOTE: on error this returns a nil slice, so it must not be assigned back over finOut —
+	// doing so discards every finder patch accumulated above.
+	guardOut, f3, err := excludeLaneFromStockDrop(finOut, c.CamelCase)
+	if err != nil {
+		// Soft-skip: a finder with no dropNonHoloLaneBps guard has nothing to exclude the lane
+		// from, so this is a genuine no-op rather than a failure. Noted, not silent — if the guard
+		// exists under another name, the lane would drop its own bp and build as pure stock.
+		fmt.Printf("  ~ %s: no stock-drop guard found — skipped (%v)\n", finRel, err)
+		f3 = false
+	} else {
+		finOut = guardOut
+	}
+	targets = append(targets, soongTarget{finRel, finOut, f1 || f2 || f3 || !bytesEqual(finOut, finSrc)})
 
 	// Lane-INDEPENDENT stock fix (T-directed 2026-07-13): license-metadata back-fill so a
 	// full-image / compatibility-suite build doesn't trip "<tool> has no license metadata".
@@ -142,6 +173,9 @@ func stageSoongPatches(c LaneConfig, outRoot string) (staged int, fatal bool) {
 	origs := map[string][]byte{aarRel: aarSrc, visRel: visSrc, finRel: finSrc}
 	if compatStaged {
 		origs[compatRel] = compatSrc
+	}
+	if nevStaged {
+		origs[nevRel] = nevSrc
 	}
 	fmt.Printf("\nsoong lane-routing patches (STAGED — review, then `sovereign-lane-surgeon apply -out %s`):\n", outRoot)
 	for _, t := range targets {

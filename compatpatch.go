@@ -66,10 +66,11 @@ $(foreach t,$(test_tools) $(test_suite_prebuilt_tools),\
 const compatMkBackfillMarker = `$(if $(strip $(ALL_TARGETS.$(t).META_LIC)),,$(eval ALL_TARGETS.$(t).META_LIC := $(module_license_metadata)))`
 
 // patchCompatibilityMk swaps the stock license-metadata loop for the back-filling one.
-//   changed=true, found=true  → patched now.
-//   changed=false, found=true → already patched (idempotent no-op).
-//   changed=false, found=false → stock block not in the known form (AOSP-version drift); the
-//                                caller SKIPS and warns rather than guessing.
+//
+//	changed=true, found=true  → patched now.
+//	changed=false, found=true → already patched (idempotent no-op).
+//	changed=false, found=false → stock block not in the known form (AOSP-version drift); the
+//	                             caller SKIPS and warns rather than guessing.
 func patchCompatibilityMk(content []byte) (out []byte, changed, found bool, err error) {
 	s := string(content)
 	if strings.Contains(s, compatMkBackfillMarker) {
@@ -86,8 +87,9 @@ func patchCompatibilityMk(content []byte) (out []byte, changed, found bool, err 
 }
 
 // unpatchCompatibilityMk reverses patchCompatibilityMk byte-for-byte (used by uninstall).
-//   changed=true  → reverted to stock.
-//   changed=false → not patched by us (no marker) → left as-is.
+//
+//	changed=true  → reverted to stock.
+//	changed=false → not patched by us (no marker) → left as-is.
 func unpatchCompatibilityMk(content []byte) (out []byte, changed bool, err error) {
 	s := string(content)
 	if !strings.Contains(s, compatMkPatchedBlock) {

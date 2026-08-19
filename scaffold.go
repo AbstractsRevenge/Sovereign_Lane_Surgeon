@@ -144,6 +144,40 @@ SOONG_CONFIG_{{.Name}}_package_routing_enable_{{.Name}}_package_overrides := tru
 `))
 
 // genEmuProduct renders one goldfish emu product file: its repo-relative path + content.
+// genEmuProductFromLane derives the emulator product from the SOURCE lane's own product instead
+// of the TODO template. For a lane-sourced fork this is strictly better: the source lane's product
+// already encodes the choices the template can only leave as TODOs — which apps the lane must ship
+// (a lane that omits its Dialer/Contacts has no default provider and crash-loops on boot), the
+// PRODUCT_SOONG_NAMESPACES it needs (bootable/deprecated-ota is not optional; without it kati
+// fails on missing updater libs), the privileged-permission mode, and the artifact-path
+// allowlist. Every lane token is repointed; returns ok=false if the source product is absent, so
+// the caller falls back to the template.
+func genEmuProductFromLane(c LaneConfig, f emuForm, outRoot, srcLane string) (rel, content string, ok bool) {
+	srcName := f.ProdStem + "_" + srcLane
+	newName := f.ProdStem + "_" + c.Name
+	srcRel := filepath.Join("device", "generic", "goldfish", "64bitonly", "product", srcName+".mk")
+	b, err := os.ReadFile(filepath.Join(outRoot, srcRel))
+	if err != nil {
+		return "", "", false
+	}
+	out := string(b)
+	// Whole-token replacements, longest-first so <stem>_<lane> is rewritten before a bare <lane>.
+	for _, r := range [][2]string{
+		{srcName, newName},
+		{"frameworks-" + srcLane, "frameworks-" + c.Name},
+		{"packages-" + srcLane, "packages-" + c.Name},
+		{srcLane + "_framework_routing", c.Name + "_framework_routing"},
+		{srcLane + "_package_routing", c.Name + "_package_routing"},
+		{"enable_" + srcLane + "_", "enable_" + c.Name + "_"},
+	} {
+		out = strings.ReplaceAll(out, r[0], r[1])
+	}
+	out = "# Derived by sovereign-lane-surgeon from " + srcRel + " (create -from " + srcLane + ").\n" +
+		"# Lane tokens repointed; the app suite, namespaces and privapp mode are INHERITED, because\n" +
+		"# those are exactly the fields the from-scratch template can only leave as TODOs.\n" + out
+	return filepath.Join("device", "generic", "goldfish", "64bitonly", "product", newName+".mk"), out, true
+}
+
 func genEmuProduct(c LaneConfig, f emuForm) (string, string, error) {
 	data := emuTmplData{
 		Name:        c.Name,
@@ -200,6 +234,14 @@ func writeScaffold(c LaneConfig, outRoot string) int {
 	wrote, skipped := 0, 0
 	if c.Goldfish {
 		for _, f := range emuForms {
+			if c.FromLane != "" {
+				if r, ct, ok := genEmuProductFromLane(c, f, outRoot, c.FromLane); ok {
+					w, sk := writeIfAbsent(outRoot, r, ct)
+					wrote += w
+					skipped += sk
+					continue
+				}
+			}
 			rel, content, err := genEmuProduct(c, f)
 			if err != nil {
 				fmt.Fprintf(os.Stderr, "  ! render %s: %v\n", f.Key, err)
@@ -305,17 +347,29 @@ func writeScaffold(c LaneConfig, outRoot string) int {
 		// requalify: repoint the cloned bp's internal //<root>/… labels to the lane path where
 		// the target was forked (fork-boundary aware) — so large forks (frameworks/base) resolve.
 		runRequalify(c, outRoot)
+		// Lane-SOURCED fork: the clone is verbatim, so it still points at the SOURCE lane —
+		// //frameworks-<src>/… labels, bare include_dirs paths, and paths embedded in genrule cmd
+		// strings. The new lane's finder drops the source lane, so a qualified label dangles; a
+		// BARE path is worse, resolving against the source lane's files (still on disk) so the
+		// clone compiles green against the wrong tree.
+		if c.FromLane != "" {
+			runRequalifyFromLane(c, outRoot, c.FromLane)
+			// Blueprint files are not the only place a clone carries its source lane's paths:
+			// .proto imports, C/C++ #includes and .mk paths do too, and those failures surface
+			// inside GENERATED files (a .pb.h whose #include still names the source lane).
+			runRelocateLaneSourcePaths(c, outRoot, c.FromLane)
+		}
 		// rename model only (no-op for keep-name): tier 1 installables (+overrides), then tier 2
 		// libraries (rename + repoint every dep ref in lockstep).
 		runRenameInstallables(c, outRoot)
 		runRenameLibs(c, outRoot)
-		runRenameFrameworkClass(c, outRoot) // no-op: framework-class stays KEEP-NAME (Model-A hybrid)
-		runNoComposeDropDeps(c, outRoot)    // no-op unless -no-compose: drop dangling Compose dep refs
+		runRenameFrameworkClass(c, outRoot)       // no-op: framework-class stays KEEP-NAME (Model-A hybrid)
+		runNoComposeDropDeps(c, outRoot)          // no-op unless -no-compose: drop dangling Compose dep refs
 		runNoComposeScopeSystemUISrcs(c, outRoot) // no-op unless -no-compose: scope SystemUI srcs to kotlin/**
 	}
 
 	// Route manifest — new file, lean drop-list seed (populate from build evidence later).
-	if mf, err := emitRouteManifest(c.Name, c.CamelCase, outRoot); err == nil {
+	if mf, err := emitRouteManifestFrom(c.Name, c.CamelCase, outRoot, c.FromLane); err == nil {
 		w, s := writeIfAbsent(outRoot, filepath.Join("."+c.Name, c.Name+"_bp_route_manifest.json"), string(mf))
 		wrote += w
 		skipped += s

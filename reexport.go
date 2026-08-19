@@ -681,8 +681,8 @@ func runReexport(c LaneConfig, outRoot string, apply bool) {
 	}
 	droppedBps := droppedStockParallelBps(c, outRoot)
 	fmt.Printf("reexport: %d per-file dropped stock parallels (keep-name-twin subdirs of additive forks)\n", len(droppedBps))
-	orphaned := map[string]string{}    // keep-name module -> type
-	attrs := map[string]stubAttrs{}    // keep-name module -> SDK/apex attributes of its ORIGINAL def
+	orphaned := map[string]string{} // keep-name module -> type
+	attrs := map[string]stubAttrs{} // keep-name module -> SDK/apex attributes of its ORIGINAL def
 	collectOrphans := func(p string) {
 		mods, _ := bpModules(p)
 		ma := bpModuleAttrs(p)

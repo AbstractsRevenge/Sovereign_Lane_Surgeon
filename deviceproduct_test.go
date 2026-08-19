@@ -195,3 +195,38 @@ func TestGenDeviceCompanions(t *testing.T) {
 		t.Error("unresolved device must not emit a LIVE (uncommented) stock-HW inherit")
 	}
 }
+
+// board_config.mk finds the board by GLOB (`*/$(TARGET_DEVICE)/BoardConfig.mk`) and the lane keeps
+// the stock PRODUCT_DEVICE, so a copied board subdir matches for every product of that device and
+// kati aborts with "Multiple board config files". The lane shares the stock board.
+func TestCopyDeviceFamilyTreeSkipsBoardDirs(t *testing.T) {
+	root := t.TempDir()
+	fam := filepath.Join(root, "device", "google", "pantah")
+	for _, d := range []string{"panther", "cheetah", "audio"} {
+		if err := os.MkdirAll(filepath.Join(fam, d), 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	// board subdirs are the ones carrying BoardConfig.mk
+	for _, d := range []string{"panther", "cheetah"} {
+		if err := os.WriteFile(filepath.Join(fam, d, "BoardConfig.mk"), []byte("x\n"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := os.WriteFile(filepath.Join(fam, "audio", "mixer.xml"), []byte("<x/>\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	c := deriveLane("zed", true, nil, false, false, "")
+	if _, _, err := copyDeviceFamilyTree(c, root, "pantah"); err != nil {
+		t.Fatal(err)
+	}
+	dst := filepath.Join(root, "device", "google", "pantah-zed")
+	for _, d := range []string{"panther", "cheetah"} {
+		if _, err := os.Stat(filepath.Join(dst, d, "BoardConfig.mk")); err == nil {
+			t.Errorf("board subdir %q must NOT be copied (kati globs it for every %s product)", d, d)
+		}
+	}
+	if _, err := os.Stat(filepath.Join(dst, "audio", "mixer.xml")); err != nil {
+		t.Error("non-board HW subdirs must still be copied")
+	}
+}

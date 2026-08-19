@@ -50,7 +50,7 @@ import (
 	"strings"
 )
 
-const version = "0.2.0"
+const version = "0.3.0"
 
 func main() {
 	if len(os.Args) < 2 {
@@ -162,7 +162,8 @@ func cmdCreate(args []string) int {
 	goldfish := fs.Bool("goldfish", true, "scaffold goldfish emulator products (sdk_phone64/sdk_tablet)")
 	cuttlefish := fs.Bool("cuttlefish", true, "note cuttlefish products in the plan")
 	devices := fs.String("devices", "", "comma-separated device names to note (e.g. lynx,tangorpro)")
-	fork := fs.String("fork", "", "comma-separated stock subtrees to clone into the lane tree (e.g. frameworks/base/core/res,packages/apps/Settings)")
+	fork := fs.String("fork", "", "comma-separated subtrees to clone into the lane tree (e.g. frameworks/base/core/res,packages/apps/Settings). With -from, may also name LANE roots (frameworks-holo,packages-holo).")
+	from := fs.String("from", "", "seed this lane from an EXISTING LANE instead of stock (e.g. -from holo): defaults -fork to that lane's roots, repoints its labels/paths onto the new lane, and inherits its curated bp drop-list. A lane-sourced fork inherits the source's directory RELOCATIONS, which the per-file drop rule cannot derive.")
 	forkExclude := fs.String("fork-exclude", "", "comma-separated subpaths to LEAVE stock inside a fork (namespace-complex, e.g. frameworks/base/packages/SystemUI)")
 	prefixDirs := fs.String("prefix-dirs", "", "physical directory prefix when KeepName is false (e.g. NexusM)")
 	noCompose := fs.Bool("no-compose", false, "experimental: bypass AndroidX/Compose (Nexus-Modern style — leave Compose/AndroidX subtrees stock, auto-drop their dep refs, scope SystemUI srcs to the re-authored kotlin/ tree)")
@@ -200,11 +201,38 @@ func cmdCreate(args []string) int {
 			fmt.Fprintf(os.Stderr, "create: up to 3 lanes at a time (got %d)\n", len(names))
 			return 2
 		}
+		// A lane name is a SUFFIX in the finder's path predicates, so it must be unique against
+		// every directory name already in the tree. Checked before any file is written: a bad name
+		// is only visible later as an unrelated lane failing on a module it never referenced.
+		if *out != "" {
+			for _, nm := range names {
+				if off, total := checkLaneSuffixCollision(*out, nm); total > 0 {
+					fmt.Fprintf(os.Stderr, "create: REFUSED — lane name %q collides with %d existing director%s ending in \"-%s\".\n",
+						nm, total, map[bool]string{true: "y", false: "ies"}[total == 1], nm)
+					for _, o := range off {
+						fmt.Fprintf(os.Stderr, "    %s\n", o)
+					}
+					if total > len(off) {
+						fmt.Fprintf(os.Stderr, "    ... and %d more\n", total-len(off))
+					}
+					fmt.Fprintf(os.Stderr, "  The finder drops any path component ending in the lane suffix, so EVERY lane in this\n"+
+						"  tree would stop seeing those directories. Choose a name that no directory ends with.\n")
+					return 2
+				}
+			}
+		}
 		for _, nm := range names {
 			c := deriveLane(nm, !*rename, devs, *goldfish, *cuttlefish, *prefixDirs)
 			c.Forks = forks
 			c.ForkExclude = forkExcludes
 			c.NoCompose = *noCompose
+			c.FromLane = *from
+			// A lane-sourced fork defaults to cloning the source lane WHOLE. Naming the roots by
+			// hand is the common case and easy to get subtly wrong (a partial clone silently
+			// falls through to stock for whatever was missed).
+			if *from != "" && len(forks) == 0 {
+				c.Forks = []string{"frameworks-" + *from, "packages-" + *from}
+			}
 			cfgs = append(cfgs, c)
 		}
 	} else {

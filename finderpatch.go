@@ -21,6 +21,7 @@ import (
 	"go/format"
 	"go/parser"
 	"go/token"
+	"sort"
 	"strconv"
 	"strings"
 	"text/template"
@@ -319,6 +320,16 @@ var finderKeepNameApplyTmpl = template.Must(template.New("keepnameapply").Parse(
 		"\t\tif !strings.HasPrefix(bp, \"frameworks{{.DirSuffix}}/\") && !strings.HasPrefix(bp, \"packages{{.DirSuffix}}/\") {\n" +
 		"\t\t\tcontinue\n" +
 		"\t\t}\n" +
+		"\t\t// Lane namespace-declaration bps. A lane subtree that declares its OWN soong_namespace\n" +
+		"\t\t// keeps its modules out of the global namespace, so stock consumers referencing them by\n" +
+		"\t\t// bare name stop resolving (\"depends on undefined module\" from files that never mention\n" +
+		"\t\t// the lane). Drop the lane declaration so the subtree collapses to global — EXCEPT where\n" +
+		"\t\t// the lane genuinely owns the namespace (pods whose short names need it to disambiguate),\n" +
+		"\t\t// which is what is{{.Camel}}OwnedNamespaceBp names.\n" +
+		"\t\tif bpDeclaresNamespace(bp) && !is{{.Camel}}OwnedNamespaceBp(bp) {\n" +
+		"\t\t\ttoDrop[bp] = true\n" +
+		"\t\t\tcontinue\n" +
+		"\t\t}\n" +
 		"\t\tif toDrop[bp] {\n" +
 		"\t\t\tcontinue // namespace-collapse drop (lane bp removed); its stock parallel is kept\n" +
 		"\t\t}\n" +
@@ -344,6 +355,17 @@ var finderKeepNameApplyTmpl = template.Must(template.New("keepnameapply").Parse(
 		"\t\treturn \"packages/\" + strings.TrimPrefix(bp, \"packages{{.DirSuffix}}/\")\n" +
 		"\t}\n" +
 		"\treturn \"\"\n" +
+		"}\n\n" +
+		"// is{{.Camel}}OwnedNamespaceBp reports whether a lane namespace-decl bp must stay NAMESPACED\n" +
+		"// rather than collapse to the global namespace. Only decomposition pods qualify: their\n" +
+		"// per-layer modules carry short generic names (api/impl repeated across layers) that would\n" +
+		"// collide with each other at root, so each pod dir keeps its own nested namespace.\n" +
+		"//\n" +
+		"// Everything else collapses. A lane subtree that keeps its own namespace holds its modules\n" +
+		"// out of the global one, so stock consumers naming them bare stop resolving — surfacing as\n" +
+		"// \"depends on undefined module\" in stock files that never mention the lane.\n" +
+		"func is{{.Camel}}OwnedNamespaceBp(bp string) bool {\n" +
+		"\treturn strings.Contains(bp, \"/pods/\")\n" +
 		"}\n"))
 
 // gofmtSnippet formats a set of top-level Go declarations by wrapping them in a throwaway
@@ -535,6 +557,167 @@ func insertLaneFuncs(src []byte, camel, block string) ([]byte, bool, error) {
 
 // insertPipelineCall splices `if is<Camel>Lane(config) { androidBps = apply<Camel>BpRoutes(...) }`
 // immediately before the `if len(androidBps) == 0` guard in the finder pipeline. Idempotent.
+// PatchNeverallowLanePaths mirrors every STOCK path in build/soong/android/neverallow.go's
+// allowlists onto the lane: "frameworks/X" also allows "frameworks-<lane>/X", likewise packages/.
+//
+// Several neverallow rules restrict a module type or property to an allowlist of DIRECTORIES
+// (java_device_for_host, cc stubs implementation_installable, ndk_library export_header_libs, …).
+// A lane that forks those subtrees holds identical content at a path not on any list, so soong
+// rejects the lane's own bp with a message about module types and NDK header hygiene — which
+// reads as bad forked content rather than a missing allowlist entry. Each one costs a build
+// round to discover, and they surface one at a time.
+//
+// The stock-path-mirroring rule is not a guess: applied to a tree whose Holo lane was extended by
+// hand over time, it reproduces exactly the entries that were added by hand, at all three sites
+// (a named *AllowedList var, another such var, and an inline NotIn(...) argument list).
+//
+// Handles both containers — composite literals and inline call args — and is idempotent.
+// Soft-skips a tree whose neverallow.go has no such lists.
+func PatchNeverallowLanePaths(src []byte, lane string) (out []byte, changed bool, err error) {
+	fset := token.NewFileSet()
+	f, perr := parser.ParseFile(fset, "", src, parser.ParseComments)
+	if perr != nil {
+		return nil, false, fmt.Errorf("parse: %w", perr)
+	}
+
+	laneTwin := func(v string) (string, bool) {
+		for _, root := range []string{"frameworks", "packages"} {
+			if strings.HasPrefix(v, root+"/") {
+				return root + "-" + lane + "/" + strings.TrimPrefix(v, root+"/"), true
+			}
+		}
+		return "", false
+	}
+
+	type insertion struct {
+		off  int
+		text string
+	}
+	var inserts []insertion
+
+	// consider handles one allowlist container: the string elements, and where an element ends.
+	consider := func(elts []ast.Expr, multiline bool) {
+		present := map[string]bool{}
+		for _, e := range elts {
+			if bl, ok := e.(*ast.BasicLit); ok && bl.Kind == token.STRING {
+				if v, uerr := strconv.Unquote(bl.Value); uerr == nil {
+					present[v] = true
+				}
+			}
+		}
+		for _, e := range elts {
+			bl, ok := e.(*ast.BasicLit)
+			if !ok || bl.Kind != token.STRING {
+				continue
+			}
+			v, uerr := strconv.Unquote(bl.Value)
+			if uerr != nil {
+				continue
+			}
+			twin, ok := laneTwin(v)
+			if !ok || present[twin] {
+				continue
+			}
+			present[twin] = true // don't emit the same twin twice within one container
+			text := fmt.Sprintf(", %q", twin)
+			if multiline {
+				text = fmt.Sprintf(",\n\t\t%q", twin)
+			}
+			inserts = append(inserts, insertion{fset.Position(bl.End()).Offset, text})
+		}
+	}
+
+	ast.Inspect(f, func(n ast.Node) bool {
+		switch v := n.(type) {
+		case *ast.CompositeLit:
+			// Only []string allowlists, not arbitrary struct literals.
+			at, ok := v.Type.(*ast.ArrayType)
+			if !ok {
+				return true
+			}
+			if id, ok := at.Elt.(*ast.Ident); !ok || id.Name != "string" {
+				return true
+			}
+			multi := len(v.Elts) > 0 && fset.Position(v.Rbrace).Line != fset.Position(v.Elts[len(v.Elts)-1].Pos()).Line
+			consider(v.Elts, multi)
+		case *ast.CallExpr:
+			// Inline `NotIn("a", "b")` argument lists.
+			sel, ok := v.Fun.(*ast.SelectorExpr)
+			if !ok || sel.Sel.Name != "NotIn" {
+				return true
+			}
+			consider(v.Args, false)
+		}
+		return true
+	})
+
+	if len(inserts) == 0 {
+		return src, false, nil
+	}
+	// Apply from the end so earlier offsets stay valid.
+	sort.Slice(inserts, func(i, j int) bool { return inserts[i].off > inserts[j].off })
+	out = append([]byte{}, src...)
+	for _, in := range inserts {
+		out = append(out[:in.off], append([]byte(in.text), out[in.off:]...)...)
+	}
+	if _, rerr := parser.ParseFile(token.NewFileSet(), "", out, 0); rerr != nil {
+		return nil, false, fmt.Errorf("post-splice reparse failed: %w", rerr)
+	}
+	return out, true, nil
+}
+
+// excludeLaneFromStockDrop appends `&& !is<Camel>Lane(config)` to the condition guarding
+// dropNonHoloLaneBps. That call runs BEFORE the lane's own routes and drops every bp matching
+// isOtherLaneBp — which the cross-cut just taught to match this lane's suffix. Without this the
+// new lane drops its OWN content and every "lane build" is silently a pure-stock build that
+// still reports green. Idempotent: a no-op once the guard already names this lane.
+func excludeLaneFromStockDrop(src []byte, camel string) (out []byte, changed bool, err error) {
+	fset := token.NewFileSet()
+	f, err := parser.ParseFile(fset, "", src, parser.ParseComments)
+	if err != nil {
+		return nil, false, fmt.Errorf("parse: %w", err)
+	}
+	guard := "is" + camel + "Lane(config)"
+	var target *ast.IfStmt
+	ast.Inspect(f, func(n ast.Node) bool {
+		if target != nil {
+			return false
+		}
+		ifs, ok := n.(*ast.IfStmt)
+		if !ok || ifs.Body == nil {
+			return true
+		}
+		for _, st := range ifs.Body.List {
+			as, ok := st.(*ast.AssignStmt)
+			if !ok || len(as.Rhs) != 1 {
+				continue
+			}
+			ce, ok := as.Rhs[0].(*ast.CallExpr)
+			if !ok {
+				continue
+			}
+			if id, ok := ce.Fun.(*ast.Ident); ok && id.Name == "dropNonHoloLaneBps" {
+				target = ifs
+				return false
+			}
+		}
+		return true
+	})
+	if target == nil {
+		return nil, false, fmt.Errorf("guard `if ... { androidBps = dropNonHoloLaneBps(...) }` not found")
+	}
+	if condSrc := string(src[fset.Position(target.Cond.Pos()).Offset:fset.Position(target.Cond.End()).Offset]); strings.Contains(condSrc, guard) {
+		return src, false, nil // already excluded
+	}
+	off := fset.Position(target.Cond.End()).Offset
+	ins := []byte(" && !" + guard)
+	out = append(append(append([]byte{}, src[:off]...), ins...), src[off:]...)
+	if _, perr := parser.ParseFile(token.NewFileSet(), "", out, 0); perr != nil {
+		return nil, false, fmt.Errorf("post-splice reparse failed: %w", perr)
+	}
+	return out, true, nil
+}
+
 func insertPipelineCall(src []byte, camel string) (out []byte, changed bool, err error) {
 	fset := token.NewFileSet()
 	f, err := parser.ParseFile(fset, "", src, parser.ParseComments)

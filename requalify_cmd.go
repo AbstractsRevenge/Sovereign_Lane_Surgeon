@@ -36,14 +36,28 @@ func cmdRequalify(args []string) int {
 	subtree := fs.String("subtree", "", "optional repo-relative subtree to limit the walk (default: frameworks-<lane> + packages-<lane>)")
 	force := fs.Bool("force", false, "absolute-sovereignty: retarget stock labels to the lane path even when that lane parallel doesn't exist yet (grant to a not-yet-forked package is harmless + forward-compatible)")
 	prefix := fs.String("prefix", "", "rename-model: prefix the app/package segment after apps//base/packages/ (e.g. -prefix NexusM → //packages/apps/Nfc → //packages-nexusm/apps/NexusMNfc)")
+	from := fs.String("from", "", "source lane to repoint FROM (e.g. -from holo rewrites //frameworks-holo/… → //frameworks-<name>/…). Default: stock roots.")
+	sources := fs.Bool("sources", false, "also relocate lane paths inside NON-blueprint sources (.proto imports, C/C++ #includes, .mk paths). Requires -from. These break the build from inside GENERATED files, so they are invisible to any Android.bp check.")
+	paths := fs.Bool("paths", false, "also rewrite UNQUALIFIED root-relative paths (include_dirs, aidl.include_dirs, cmd fragments). Off by default: only //-qualified labels are touched. Required for a lane-sourced fork, where a bare path silently resolves against the source lane's on-disk files.")
 	_ = fs.Parse(args)
 	if *name == "" || *out == "" {
 		fmt.Fprintln(os.Stderr, "requalify: -name and -out are required")
 		return 2
 	}
+	if *from == *name && *from != "" {
+		fmt.Fprintln(os.Stderr, "requalify: -from and -name must differ (a lane cannot be requalified onto itself)")
+		return 2
+	}
+	// srcSuffix selects which roots are REWRITTEN. Empty = stock (//frameworks/…), the original
+	// delane. A -from lane makes this a lane→lane repoint, which is what a lane-sourced fork needs:
+	// the verbatim clone carries the source lane's labels, and the new lane's finder drops that lane.
+	srcSuffix := ""
+	if *from != "" {
+		srcSuffix = "-" + *from
+	}
 	laneMap := map[string]string{
-		"frameworks": "frameworks-" + *name,
-		"packages":   "packages-" + *name,
+		"frameworks" + srcSuffix: "frameworks-" + *name,
+		"packages" + srcSuffix:   "packages-" + *name,
 	}
 	cache := map[string]bool{}
 	var roots []string
@@ -53,7 +67,7 @@ func cmdRequalify(args []string) int {
 		roots = []string{"frameworks-" + *name, "packages-" + *name}
 	}
 	changed, failed := 0, 0
-	fmt.Printf("requalify //<root>/… → //<root>-%s/… (AST-safe, forked targets only):\n", *name)
+	fmt.Printf("requalify //<root>%s/… → //<root>-%s/… (AST-safe, forked targets only):\n", srcSuffix, *name)
 	for _, root := range roots {
 		rootDir := filepath.Join(*out, root)
 		if fi, err := os.Stat(rootDir); err != nil || !fi.IsDir() {
@@ -63,7 +77,7 @@ func cmdRequalify(args []string) int {
 			if e != nil || fi.IsDir() || filepath.Base(p) != "Android.bp" {
 				return nil
 			}
-			ch, ferr := requalifyFile(p, *out, laneMap, cache, *force, *prefix)
+			ch, ferr := requalifyFile(p, *out, laneMap, cache, *force, *prefix, *paths)
 			if ferr != nil {
 				failed++
 				return nil
@@ -77,5 +91,12 @@ func cmdRequalify(args []string) int {
 		})
 	}
 	fmt.Printf("requalify: %d bp repointed, %d skipped (parse).\n", changed, failed)
+	if *sources {
+		if *from == "" {
+			fmt.Fprintln(os.Stderr, "requalify: -sources requires -from <lane>")
+			return 2
+		}
+		runRelocateLaneSourcePaths(LaneConfig{Name: *name}, *out, *from)
+	}
 	return 0
 }

@@ -55,6 +55,64 @@ This tool operationalizes the method: it wires the Soong routing, generates the 
 
 Both build "like stock, unaware of the other lanes."
 
+### Seeding a lane FROM another lane (`-from`)
+
+```bash
+./sovereign-lane-surgeon create -name holotest -from holo -out /path/to/aosp
+```
+
+`-from <lane>` seeds the new lane from an **existing lane** instead of stock — a staging lane for a
+mature one, an experiment you can throw away, a variant that starts where a proven lane left off.
+It defaults `-fork` to the source lane's roots, repoints its labels and paths onto the new lane,
+**inherits its curated bp drop-list**, and **derives the emulator product from the source lane's own**
+(app suite, soong namespaces, privapp mode) instead of leaving them as TODOs.
+
+That last part is the load-bearing one. The finder computes a lane bp's stock parallel *from its
+path*, which works right up until the source lane **moved** something:
+
+| source lane has | stock parallel | computed | result without inheritance |
+|---|---|---|---|
+| `…/vts/kotlin/Android.bp` | `…/vts/java/Android.bp` | `…/vts/kotlin/` (absent) | stock stays loaded → *"module already defined"* |
+| `packages-<src>/system/secretkeeper/…` | `system/secretkeeper/…` | `packages/system/…` (absent) | same |
+
+Those drops cannot be derived from the new lane's tree — they exist only as the source lane's
+accumulated curation, so a lane-sourced fork must inherit them.
+
+**Blueprint files are not the only place the source lane's paths live.** A verbatim clone also
+carries them in formats no `.bp` check can see, and those failures surface inside *generated* files:
+
+| carrier | form | fails as |
+|---|---|---|
+| `.proto` | `import "frameworks-<src>/…/Resources.proto"` | a generated `.pb.h` whose `#include` names the source lane |
+| `.cpp` / `.h` | `#include <frameworks-<src>/…/x.proto.h>` | missing header |
+| `.mk` | copy-file paths | wrong file shipped |
+| `.go` | lane soong logic setting `props.Visibility` to the source lane | grant to a lane this lunch never loads |
+
+`create -from` rewrites these; `requalify -sources` does it standalone for an existing lane. Types
+that are *not* build inputs (`.json` provenance records, `.html`, binaries) are reported, never
+silently edited. The `soong_config` namespace is handled too — it is an identifier, not a path, so
+no path rewrite reaches it, and a `select()` naming a namespace the new lunch never sets quietly
+takes the stock branch of the lane's own lane-aware select.
+
+### Lane names are path predicates
+
+The finder matches lane content by **path-component suffix**, so `create` refuses a name that any
+existing directory already ends with:
+
+```
+create: REFUSED — lane name "test" collides with 78 existing directories ending in "-test".
+    frameworks/base/ravenwood/tests/minimum-test
+    packages/modules/SdkExtensions/sdk-extensions-info-test
+    ...
+```
+
+`-test` matches 107 stock directories, 15 with an `Android.bp` — including
+`prebuilts/misc/common/androidx-test`. Every lane in the tree would stop seeing them, and the
+failure surfaces somewhere else entirely (`external/robolectric` → *"depends on undefined module
+androidx.test.core"*), naming neither the new lane nor the real cause. The check runs before any
+file is written, because by the time a build disagrees the tree already holds a multi-GB clone and
+patched shared soong sources.
+
 The **app-naming / rename** model (`-rename`) renames only what should carry a brand and leaves the derived-name plumbing keep-name — the *Model-A hybrid*:
 
 1. **Installables** — `android_app` → `<Prefix><Name>` with `overrides:["<stock>"]`.
@@ -96,13 +154,24 @@ m -j16 droid          # full image
 ## Architecture
 
 ```
-create ─┬─ soong patches   finder.go (per-lane BP routing), aar.go (isLaneLunch → framework
-        │                   suppressors), visibility.go (lane↔stock pkg map)  [go/ast, AST-safe]
+create ─┬─ name guard      refuse a lane name any existing directory already ends with (the name
+        │                   IS a finder path predicate) — checked before anything is written
+        ├─ soong patches   finder.go (per-lane BP routing + exclude the lane from the stock-drop
+        │                   guard), aar.go (isLaneLunch → framework suppressors), visibility.go
+        │                   (lane↔stock pkg map), neverallow.go (mirror stock allowlist dirs onto
+        │                   the lane)  [go/ast, AST-safe]
         ├─ device products  device/google/<family>-<lane>/aosp_<product>_<lane>.mk (+ SoC auto-fill)
-        │                   goldfish + cuttlefish emulator products
+        │                   goldfish + cuttlefish emulator products. BOARD subdirs are NOT copied:
+        │                   kati globs '*/$(TARGET_DEVICE)/BoardConfig.mk' across all of device/,
+        │                   and the lane keeps the stock PRODUCT_DEVICE, so a copied board dir
+        │                   collides for every product of that device
         ├─ bp-mirror        clone forked subtrees (symlink-safe, .git-skipping)
         ├─ requalifier      //frameworks/base/…  →  //frameworks-<lane>/…   (fork-boundary aware,
-        │                   AST-safe, form-preserving — vendored Blueprint parser)
+        │                   AST-safe, form-preserving — vendored Blueprint parser). Covers labels
+        │                   inside select() bodies, and with -paths also BARE root-relative paths
+        │                   (include_dirs) + paths embedded in genrule cmd strings
+        ├─ lane-source      (-from only) repoint the clone off its source lane + inherit that
+        │                   lane's curated bp drop-list (its directory relocations)
         ├─ rename pass      (-rename only) installables (+overrides) + libs+dep-repoint through the
         │                   Blueprint AST; framework-class stays KEEP-NAME (Model-A hybrid)
         ├─ no-compose       (-no-compose only) leave Compose/AndroidX subtrees stock, auto-drop dangling
@@ -112,8 +181,12 @@ create ─┬─ soong patches   finder.go (per-lane BP routing), aar.go (isLane
         └─ route manifest   drops the known stock danglers → builds ZERO-FLAG (see below)
 
 apply     ── commits the staged soong patches, snapshotting each file first
-uninstall ── fully reverses a seed (byte-identical): dirs + shared products + AndroidProducts.mk + soong
-             patches (inverse AST edits — multi-lane-safe, leaves sibling lanes intact)
+uninstall ── reverses a seed (byte-identical), scoped by -target:
+               all     (default) dirs + shared products + AndroidProducts.mk + soong patches
+               patches soong/make patches ONLY — the lane TREES stay on disk, so a lane can be
+                       re-registered (renamed, re-seeded) without re-cloning multiple GB
+               lanes   trees + products ONLY — the patches stay registered
+             Inverse AST edits throughout; multi-lane-safe, leaves sibling lanes intact.
 rename-module ─ AST-safe module-name rewrite across the lane tree: `name:` + every dep-ref (defaults/
              static_libs/libs/required/… + `:module` srcs) in one lockstep pass, form-preserving.
              PRIMARY USE — keep-name conformity DE-PREFIX: a lane that wrongly prefixed a
@@ -152,17 +225,39 @@ A complete sovereign lane builds with **no** `ALLOW_MISSING_DEPENDENCIES` and **
 - ✅ **App-naming / rename (Model-A hybrid)** — installables + libs+dep-repoint AST-validated (round-trip clean on real SystemUI / `frameworks/base` / `services` blueprints); framework-class is keep-name (the stem/phony tier retired after it was proven to break `platform-bootclasspath`/`services`). Drove a real branded lane (Nexus-Modern, `frameworks-nexusm`/`packages-nexusm`, ~40 forked apps) to **zero-error `m nothing` Soong analysis**.
 - ✅ **`reexport` idiom** — one pass over the Nexus-Modern lane detected 41 replaced-app stock subtrees and auto-generated 35 correct keep-name re-export stubs, replacing hand-authored graph-coherence stubs.
 - ✅ **`-no-compose`** — AndroidX/Compose-bypass wiring (exclude-gen + auto drop-dep + SystemUI srcs-scope), unit-tested.
-- ✅ **`uninstall`** — byte-identical seed reversal, proven end-to-end; multi-lane-safe.
+- ✅ **`uninstall`** — byte-identical seed reversal, proven end-to-end; multi-lane-safe. ⚠️ It removes the lane **trees** as well as the patches — a full reversal, not a patch-only undo.
+- ✅ **Lane-sourced fork (`-from`)** — proven end-to-end: a 157,119-file lane cloned from a mature one reaches a zero-error `m nothing`, **with the source lane still green on a re-verify** (mutual isolation, both directions, measured — not assumed).
 - 🚧 **Full `m droid` compile + boot** — validates forked *content*, not just graph coherence.
+- ✅ **Namespace collapse in the keep-name apply** — a lane subtree declaring its own `soong_namespace` holds its modules out of the global namespace, so stock consumers naming them bare stop resolving. The keep-name route function now drops those declarations (keeping only genuine pods), matching the rule the mature lane arrived at — verified against that lane's real `Android.bp.list`, 11/11.
 - 🚧 **kati re-green + `reexport` edge cases** — the fork-everything campaign's flat-namespace tail (JNI / proto / FQ-label refs) + folding the live finder's app-naming routing (root-disposition / full-subtree-drop / apex-keep) back into the generation template.
 - 🗺️ **Roadmap** — a `doctor` that auto-detects danglers from build evidence, richer device-fork auto-fill.
 
-Self-contained, **46 tests, zero external dependencies**.
+Self-contained, **59 tests, zero external dependencies**.
+
+## A lane can be blind to itself
+
+Lane isolation has two mechanisms, and only one of them is the lunch combo:
+
+1. **The `_<lane>` lunch suffix** selects which `apply<Lane>BpRoutes` runs. This is what makes a lane
+   build *be* that lane.
+2. **The `-<lane>` directory suffix** drives the `isOtherLaneBp*` predicates that decide which bp
+   files are dropped. This is what makes lanes blind to *each other*.
+
+Registering a new lane teaches the shared `isOtherLaneBp` its suffix so the existing lanes stop
+seeing it. But that same predicate also guards `dropNonHoloLaneBps`, which runs **before** any
+lane's own routes — so a newly registered lane would drop its own content and arrive at its route
+function with nothing left. The build is then **green and silently pure stock**: no error names the
+lane, and the lane appears to work while contributing nothing.
+
+`create` therefore excludes the new lane from that guard in the same pass that teaches the
+predicate. The ordering is not incidental — the exclusion must follow the cross-cut that creates
+the hazard.
 
 ## Design notes
 
 - **Self-contained & portable.** Zero external deps; the Blueprint parser is vendored (upstream can't be `go get`'d cleanly). Runs on any AOSP tree / Android version.
 - **Reversible.** `apply` snapshots every file it touches; the mirror never clobbers a hand-edited lane file.
-- **Verified, not assumed.** Every capability was hardened by a real build finding a real gap — the test suite encodes each.
+- **Verified, not assumed.** Every capability was hardened by a real build finding a real gap — the test suite encodes each. The failures worth designing against are the ones that surface *far from their cause*: a bad lane name appearing as a robolectric dependency error, a self-dropping lane appearing as a clean build.
+- **Fail before writing.** Checks that can run before generation (the name guard) do, because the cost of discovering a naming problem after a multi-GB clone and a shared-soong patch is not symmetric with the cost of checking first.
 
 Licensed Apache-2.0. The vendored `internal/blueprint/parser` retains its upstream Apache-2.0 headers.

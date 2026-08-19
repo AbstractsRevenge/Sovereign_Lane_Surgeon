@@ -23,6 +23,7 @@ import (
 	"go/token"
 	"os"
 	"path/filepath"
+	"sort"
 	"strconv"
 	"strings"
 )
@@ -201,6 +202,48 @@ var knownStockDangles = []string{
 // is pre-populated with whichever knownStockDangles exist under outRoot — so the lane builds ZERO-FLAG
 // out of the box. Add more from build evidence (`doctor`) as they surface.
 func emitRouteManifest(lane, camel, outRoot string) ([]byte, error) {
+	return emitRouteManifestFrom(lane, camel, outRoot, "")
+}
+
+// inheritDropsFromLane returns srcLane's curated dropped_namespace_decl_paths, remapped onto the
+// new lane. A lane-sourced fork is a VERBATIM clone, so it displaces exactly the stock parallels
+// the source lane displaces — and it inherits every directory RELOCATION the source made.
+//
+// That inheritance is why the seed list is not enough. The finder computes a lane bp's stock
+// parallel from its path, which silently fails whenever the source lane moved a directory
+// (frameworks-<src>/…/vts/kotlin has no frameworks/…/vts/kotlin parallel, so stock's vts/java
+// stays loaded and both define the same modules) or the stock parallel lives under a different
+// root (packages-<src>/system/… vs system/…). Those drops cannot be derived from the new lane's
+// tree; they only exist as the source lane's accumulated curation.
+func inheritDropsFromLane(srcLane, newLane, outRoot string) ([]string, error) {
+	p := filepath.Join(outRoot, "."+srcLane, srcLane+"_bp_route_manifest.json")
+	b, err := os.ReadFile(p)
+	if err != nil {
+		return nil, fmt.Errorf("read source lane manifest %s: %w", p, err)
+	}
+	var src struct {
+		DroppedNamespaceDeclPaths []string `json:"dropped_namespace_decl_paths"`
+	}
+	if err := json.Unmarshal(b, &src); err != nil {
+		return nil, fmt.Errorf("parse source lane manifest %s: %w", p, err)
+	}
+	oldFw, newFw := "frameworks-"+srcLane+"/", "frameworks-"+newLane+"/"
+	oldPkg, newPkg := "packages-"+srcLane+"/", "packages-"+newLane+"/"
+	out := make([]string, 0, len(src.DroppedNamespaceDeclPaths))
+	for _, d := range src.DroppedNamespaceDeclPaths {
+		switch {
+		case strings.HasPrefix(d, oldFw):
+			d = newFw + strings.TrimPrefix(d, oldFw)
+		case strings.HasPrefix(d, oldPkg):
+			d = newPkg + strings.TrimPrefix(d, oldPkg)
+		}
+		out = append(out, d)
+	}
+	return out, nil
+}
+
+// emitRouteManifestFrom renders the seed manifest, optionally inheriting srcLane's curation.
+func emitRouteManifestFrom(lane, camel, outRoot, srcLane string) ([]byte, error) {
 	drops := []string{}
 	for _, p := range knownStockDangles {
 		if outRoot != "" {
@@ -209,6 +252,21 @@ func emitRouteManifest(lane, camel, outRoot string) ([]byte, error) {
 			}
 		}
 		drops = append(drops, p)
+	}
+	if srcLane != "" && outRoot != "" {
+		inherited, err := inheritDropsFromLane(srcLane, lane, outRoot)
+		if err != nil {
+			return nil, err
+		}
+		seen := map[string]bool{}
+		for _, d := range append(drops, inherited...) {
+			seen[d] = true
+		}
+		drops = drops[:0]
+		for d := range seen {
+			drops = append(drops, d)
+		}
+		sort.Strings(drops)
 	}
 	m := routeManifest{
 		SchemaVersion: "1.0",

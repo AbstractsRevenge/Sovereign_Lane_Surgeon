@@ -23,6 +23,7 @@ import (
 	"go/token"
 	"os"
 	"path/filepath"
+	"regexp"
 	"sort"
 	"strconv"
 	"strings"
@@ -178,6 +179,11 @@ type routeManifest struct {
 	Description               string   `json:"description"`
 	DroppedNamespaceDeclPaths []string `json:"dropped_namespace_decl_paths"`
 	AddedNamespaceDeclPaths   []string `json:"added_namespace_decl_paths"`
+	// DerivedFrom names the lane this one was SEEDED FROM (create -from), empty for a
+	// stock-seeded lane. It makes the tree self-describing: a downstream tool that has
+	// no authored config for this lane can ask what it came from and inherit that
+	// lane's, instead of every tool carrying its own switch of known lane names.
+	DerivedFrom string `json:"derived_from,omitempty"`
 }
 
 // knownStockDangles are non-lane stock bp whose modules dangle in a typical AOSP checkout
@@ -278,6 +284,195 @@ func emitRouteManifestFrom(lane, camel, outRoot, srcLane string) ([]byte, error)
 			"surgical dangler-drop, not blanket flag. Add more from `doctor`/build evidence as they surface.", lane, camel),
 		DroppedNamespaceDeclPaths: drops,
 		AddedNamespaceDeclPaths:   []string{},
+		DerivedFrom:               srcLane,
 	}
 	return json.MarshalIndent(m, "", "  ")
 }
+
+// ─────────────────────────────────────────────────────────────────────────────────────────────
+// LANE ALLOWLIST DISCOVERY — shared-tree .go files that carry per-lane path entries.
+//
+// build/soong is NOT the only place lane paths must be registered. ANY Soong plugin anywhere in
+// the tree may call android.AddNeverAllowRules or keep its own lane-path list, and the surgeon's
+// fixed patch set (aar/visibility/finder/neverallow) cannot reach them. Found the hard way on
+// holo2test (2026-08-20): external/icu/build/icu.go carries libandroidicu/libicuuc allowlists whose
+// entries include "packages-holo/modules/RuntimeI18n/apex/". A lane missing from that list fails
+// with "violates neverallow requirements" — an error naming neither the lane nor the file.
+//
+// A FIXED list of known sites would be a false promise: the next plugin to add one would not be on
+// it. So this DISCOVERS them instead, from a property that is true by construction:
+//
+//	    a .go file already containing a "<root>-<some-existing-lane>/…" string literal
+//	    IS a lane allowlist, and this lane belongs beside that entry.
+//
+// Self-maintaining: a plugin added upstream tomorrow is found the moment any lane registers in it.
+// Verified against the live tree — discovery independently re-finds all four sites that were
+// located by hand: external/icu/build/icu.go, build/soong/aconfig/all_aconfig_declarations.go,
+// build/soong/android/androidmk.go, build/soong/android/apex.go.
+// ─────────────────────────────────────────────────────────────────────────────────────────────
+
+// knownLaneSuffixes returns the lane names already present in the tree (from frameworks-*/ dirs),
+// excluding the lane being created. These are the tokens that mark a list as lane-aware.
+func knownLaneSuffixes(outRoot, newLane string) []string {
+	ents, err := os.ReadDir(outRoot)
+	if err != nil {
+		return nil
+	}
+	var out []string
+	for _, e := range ents {
+		if !e.IsDir() || !strings.HasPrefix(e.Name(), "frameworks-") {
+			continue
+		}
+		if lane := strings.TrimPrefix(e.Name(), "frameworks-"); lane != "" && lane != newLane {
+			out = append(out, lane)
+		}
+	}
+	sort.Strings(out)
+	return out
+}
+
+// laneAllowlistHit is one discovered insertion: a file, and the literals to add.
+type laneAllowlistHit struct {
+	rel   string
+	adds  []string // the new lane's parallels, in first-seen order
+	model string   // the existing entry each was derived from (for the report)
+}
+
+// discoverLaneAllowlists walks the tree for .go files holding lane-path string literals and
+// computes this lane's parallel for each. Skips out*/.git/.repo, every lane tree (a lane's own
+// sources are not shared infrastructure), and .sld-* staging/snapshot dirs.
+func discoverLaneAllowlists(outRoot, newLane string) []laneAllowlistHit {
+	lanes := knownLaneSuffixes(outRoot, newLane)
+	if len(lanes) == 0 {
+		return nil
+	}
+	// Files the DEDICATED patchers already own. finder.go and neverallow.go are full of lane
+	// literals by design — discovery would "find" them and fight the purpose-built patch that
+	// understands their structure. Ownership beats pattern-matching.
+	owned := map[string]bool{
+		filepath.Join("build", "soong", "ui", "build", "finder.go"): true,
+		filepath.Join("build", "soong", "android", "neverallow.go"): true,
+		filepath.Join("build", "soong", "android", "visibility.go"): true,
+		filepath.Join("build", "soong", "java", "aar.go"):           true,
+	}
+	var hits []laneAllowlistHit
+	filepath.Walk(outRoot, func(p string, fi os.FileInfo, e error) error {
+		if e != nil {
+			return nil
+		}
+		base := filepath.Base(p)
+		if fi.IsDir() {
+			switch {
+			case base == ".git", base == ".repo", strings.HasPrefix(base, ".sld-"),
+				strings.HasPrefix(base, "out") && filepath.Dir(p) == outRoot,
+				strings.HasPrefix(base, "frameworks-"), strings.HasPrefix(base, "packages-"),
+				// Archived copies of patched soong sources are not live infrastructure. Patching
+				// one is harmless but reports a site that does not exist, which is worse than
+				// silence — it teaches a false map of the tree.
+				base == "_snapshots", strings.Contains(base, "snapshot"):
+				return filepath.SkipDir
+			}
+			return nil
+		}
+		if filepath.Ext(p) != ".go" || fi.Size() > 4<<20 {
+			return nil
+		}
+		if rel, rerr := filepath.Rel(outRoot, p); rerr == nil && owned[rel] {
+			return nil
+		}
+		b, rerr := os.ReadFile(p)
+		if rerr != nil {
+			return nil
+		}
+		src := string(b)
+		seen := map[string]bool{}
+		var adds []string
+		model := ""
+		for _, lane := range lanes {
+			for _, root := range []string{"frameworks", "packages"} {
+				tok := root + "-" + lane + "/"
+				idx := 0
+				for {
+					i := strings.Index(src[idx:], `"`+tok)
+					if i < 0 {
+						break
+					}
+					i += idx
+					j := strings.IndexByte(src[i+1:], '"')
+					if j < 0 {
+						break
+					}
+					lit := src[i+1 : i+1+j]
+					idx = i + 1 + j
+					mine := root + "-" + newLane + "/" + strings.TrimPrefix(lit, tok)
+					if seen[mine] || strings.Contains(src, `"`+mine+`"`) {
+						continue // idempotent: already registered
+					}
+					seen[mine] = true
+					adds = append(adds, mine)
+					if model == "" {
+						model = lit
+					}
+				}
+			}
+		}
+		if len(adds) > 0 {
+			rel, _ := filepath.Rel(outRoot, p)
+			hits = append(hits, laneAllowlistHit{rel: rel, adds: adds, model: model})
+		}
+		return nil
+	})
+	sort.Slice(hits, func(i, j int) bool { return hits[i].rel < hits[j].rel })
+	return hits
+}
+
+// patchLaneAllowlistFile inserts each new literal immediately after the existing entry it was
+// derived from, preserving that line's exact indentation. Parsed with go/ast first and re-parsed
+// after, so a patch that would not compile is refused rather than written (HARD RULE 3 — the AST
+// decides, never a regex over structure).
+func patchLaneAllowlistFile(src []byte, hit laneAllowlistHit, newLane string) ([]byte, bool, error) {
+	if _, err := parser.ParseFile(token.NewFileSet(), "", src, parser.ParseComments); err != nil {
+		return nil, false, fmt.Errorf("pre-parse: %w", err)
+	}
+	lines := strings.Split(string(src), "\n")
+	changed := false
+	for _, add := range hit.adds {
+		// derive the model literal for THIS add (same tail, an existing lane's root)
+		tail := add
+		if k := strings.Index(add, "/"); k >= 0 {
+			tail = add[k:]
+		}
+		insertAt, indent := -1, ""
+		for i, ln := range lines {
+			if !strings.Contains(ln, `"`) || !strings.Contains(ln, tail) {
+				continue
+			}
+			if strings.Contains(ln, `"`+add+`"`) { // already present
+				insertAt = -1
+				break
+			}
+			if regexpLaneLiteral.MatchString(ln) {
+				insertAt = i
+				indent = ln[:len(ln)-len(strings.TrimLeft(ln, " \t"))]
+			}
+		}
+		if insertAt < 0 {
+			continue
+		}
+		entry := indent + `"` + add + `",`
+		lines = append(lines[:insertAt+1], append([]string{entry}, lines[insertAt+1:]...)...)
+		changed = true
+	}
+	if !changed {
+		return src, false, nil
+	}
+	out := []byte(strings.Join(lines, "\n"))
+	if _, err := parser.ParseFile(token.NewFileSet(), "", out, parser.ParseComments); err != nil {
+		return nil, false, fmt.Errorf("post-parse (patch refused): %w", err)
+	}
+	return out, true, nil
+}
+
+// regexpLaneLiteral matches a line holding a lane-root string literal — the shape that marks a
+// line as an allowlist entry rather than prose.
+var regexpLaneLiteral = regexp.MustCompile(`"(frameworks|packages)-[a-z0-9]+/`)

@@ -92,11 +92,17 @@ func cmdRequalify(args []string) int {
 	}
 	fmt.Printf("requalify: %d bp repointed, %d skipped (parse).\n", changed, failed)
 	if *sources {
-		if *from == "" {
-			fmt.Fprintln(os.Stderr, "requalify: -sources requires -from <lane>")
-			return 2
+		// -sources used to REQUIRE -from. It no longer does: a STOCK-sourced lane has the same
+		// problem (its cloned .proto files still import frameworks/…, so protoc emits a
+		// stock-shaped #include into a generated .pb.h the lane-rooted -I cannot satisfy), it just
+		// needs the existence-guarded pass instead of the unconditional one. See
+		// relocateStockPathsInFile for why the stock direction cannot reuse the lane→lane token
+		// replace. (holo2test, 2026-08-20.)
+		if *from != "" {
+			runRelocateLaneSourcePaths(LaneConfig{Name: *name}, *out, *from)
+		} else {
+			runRelocateStockSourcePaths(LaneConfig{Name: *name}, *out)
 		}
-		runRelocateLaneSourcePaths(LaneConfig{Name: *name}, *out, *from)
 	}
 	return 0
 }

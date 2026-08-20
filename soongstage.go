@@ -169,8 +169,31 @@ func stageSoongPatches(c LaneConfig, outRoot string) (staged int, fatal bool) {
 		}
 	}
 
+	// Lane allowlists OUTSIDE build/soong — discovered, not listed. Any Soong plugin in the tree
+	// may keep its own per-lane path list (external/icu/build/icu.go does); a fixed set of known
+	// sites would miss the next one. See discoverLaneAllowlists.
+	allowOrigs := map[string][]byte{}
+	for _, hit := range discoverLaneAllowlists(outRoot, c.Name) {
+		src, rerr := readStagedOrLive(outRoot, hit.rel)
+		if rerr != nil {
+			continue
+		}
+		out, ch, perr := patchLaneAllowlistFile(src, hit, c.Name)
+		if perr != nil {
+			fmt.Fprintf(os.Stderr, "  ! lane allowlist %s: %v (skipped)\n", hit.rel, perr)
+			continue
+		}
+		if ch {
+			targets = append(targets, soongTarget{hit.rel, out, true})
+			allowOrigs[hit.rel] = src
+		}
+	}
+
 	stageRoot := filepath.Join(outRoot, stageDir)
 	origs := map[string][]byte{aarRel: aarSrc, visRel: visSrc, finRel: finSrc}
+	for k, v := range allowOrigs {
+		origs[k] = v
+	}
 	if compatStaged {
 		origs[compatRel] = compatSrc
 	}
@@ -357,7 +380,23 @@ func copyFile(src, dst string) error {
 		out.Close()
 		return err
 	}
-	return out.Close()
+	if err := out.Close(); err != nil {
+		return err
+	}
+	// ⭐ PRESERVE MODE (holo2test, 2026-08-20). os.Create makes 0666&^umask, so every EXECUTABLE
+	// in a forked lane arrived non-executable: 387 of 387 executables under frameworks/ lost the
+	// bit — a 100% miss rate, invisible until a build step tries to RUN one:
+	//     gen_combined_removed_dex.sh: Permission denied   (exit 126)
+	// It surfaces ~7,800 ninja steps in, long after the fork looked complete, and it is silent
+	// until then because nothing reads a mode until something execs.
+	//
+	// Content-only copying is a whole defect CLASS, not a one-off: the sibling ux_design_governance
+	// toolkit carries the same bug in writers/lanewrite/stage.go, where copyFile is DOCUMENTED as
+	// "preserving mode" and hardcodes 0o644. A verbatim clone means bytes AND mode.
+	if fi, serr := os.Stat(src); serr == nil {
+		return os.Chmod(dst, fi.Mode().Perm())
+	}
+	return nil
 }
 
 func bytesEqual(a, b []byte) bool { return string(a) == string(b) }

@@ -40,8 +40,22 @@ type Report struct {
 	BuildOutDir   string  `json:"build_out_dir"`
 }
 
+// green reports whether a Build Capture run is a pass. Build Capture's own vocabulary
+// (buildlog/dirnaming.go) has FOUR success statuses: full_completed (real work compiled),
+// completed_incremental (mostly cached), completed_noop (ninja had nothing to do) and
+// completed_bootstrap (`m nothing`: analysis + kati only, no compile). The last one is the
+// graph-coherence gate this whole toolkit's create -stock -> `m nothing` -> audit loop runs
+// on, so treating it as NOT GREEN made `verify`/`audit` contradict the run-dir name on every
+// successful gate (observed 2026-09-02: aosp_panther-cp2a-eng, 0 errors, VERDICT: NOT GREEN).
 func (r *Report) green() bool {
-	return r.Success && (r.DirStatus == "full_completed" || r.DirStatus == "completed_incremental")
+	if !r.Success {
+		return false
+	}
+	switch r.DirStatus {
+	case "full_completed", "completed_incremental", "completed_noop", "completed_bootstrap":
+		return true
+	}
+	return false
 }
 
 // LoadReport accepts a run-dir or a terminal_log.json path.

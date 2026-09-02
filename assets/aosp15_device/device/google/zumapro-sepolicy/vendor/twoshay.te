@@ -1,0 +1,10 @@
+# Allow ITouchContextService callback
+binder_call(twoshay, systemui_app)
+
+binder_call(twoshay, grilservice_app)
+
+# b/324278826
+unix_socket_connect(twoshay, chre, chre)
+# TODO(b/248615564): Remove above rule after CHRE multiclient HAL is launched.
+unix_socket_connect(twoshay, chre, hal_contexthub_default)
+allow twoshay self:capability2 block_suspend;

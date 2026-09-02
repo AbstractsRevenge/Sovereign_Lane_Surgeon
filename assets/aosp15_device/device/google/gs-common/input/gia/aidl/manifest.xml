@@ -1,0 +1,10 @@
+<manifest type="device" version="1.0">
+    <hal format="aidl" optional="true">
+        <name>com.google.input.gia.core</name>
+        <interface>
+            <name>IGiaService</name>
+            <instance>default</instance>
+        </interface>
+        <version>1</version>
+    </hal>
+</manifest>

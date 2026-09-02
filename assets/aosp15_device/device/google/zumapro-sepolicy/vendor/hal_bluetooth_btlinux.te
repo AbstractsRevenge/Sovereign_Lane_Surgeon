@@ -1,0 +1,4 @@
+# Allow triggering uart skip suspend
+allow hal_bluetooth_btlinux sysfs_bt_uart:file w_file_perms;
+
+allow hal_bluetooth_btlinux vendor_bt_data_file:sock_file create_file_perms;

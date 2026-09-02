@@ -1,0 +1,18 @@
+package: "vendor.vibrator.hal.flags"
+container: "vendor"
+
+flag {
+  name: "remove_capo"
+  namespace: "vibrator"
+  is_exported: true
+  description: "This flag controls the removal of utilizing Capo at the HAL level"
+  bug: "290223630"
+}
+
+flag {
+  name: "enable_pwle_v2"
+  namespace: "vibrator"
+  is_exported: true
+  description: "This flag enables the PWLE V2 APIs guarded by the CAP_COMPOSE_PWLE_EFFECTS_V2 compatability"
+  bug: "346570576"
+}

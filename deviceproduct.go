@@ -357,6 +357,11 @@ func title(s string) string {
 func writeDeviceProducts(c LaneConfig, outRoot string) (wrote, skipped int, fatal bool) {
 	copiedFamilies := map[string]bool{}
 	for _, product := range c.Devices {
+		// Seed device/google/<family> from the embedded asset bundle FIRST if -out has no such
+		// family at all yet (devicerevival.go) — so lane creation, like stock revival, needs no
+		// external AOSP tree for a device the bundle covers. resolveDevice below requires the
+		// family to already exist under -out to resolve correctly, so this must run before it.
+		preSeedFromEmbedded(outRoot, product)
 		res := resolveDevice(outRoot, product)
 		if res.Resolved {
 			fmt.Printf("  device %s → family=%s soc=%s → device/google/%s-%s/\n", product, res.Family, res.SoC, res.Family, c.Name)
@@ -589,7 +594,7 @@ func copyDeviceFamilyTree(c LaneConfig, outRoot, family string) (copied, dropped
 		if !fi.Mode().IsRegular() {
 			return nil
 		}
-		if _, statErr := os.Stat(target); statErr == nil {
+		if _, statErr := os.Stat(target); statErr == nil || neutralizedByBak(target) {
 			return nil // no-clobber
 		}
 		// .bp handling: drop collision-prone overlay/installable bp; keep+relicense HW bp.

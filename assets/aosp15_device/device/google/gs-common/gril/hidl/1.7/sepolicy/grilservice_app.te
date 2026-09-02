@@ -1,0 +1,6 @@
+# allow grilservice_app to find hal_radio_ext_service
+allow grilservice_app hal_radio_ext_service:service_manager find;
+# allow grilservice_app to binder call hal_radioext_default
+binder_call(grilservice_app, hal_radioext_default)
+# allow grilservice_app to binder call twoshay
+binder_call(grilservice_app, twoshay)

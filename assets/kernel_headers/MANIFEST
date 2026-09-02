@@ -1,0 +1,16 @@
+# Vendor kernel UAPI headers per device family: the board exposes <RELEASE_KERNEL_*_DIR>/kernel-headers
+# through TARGET_BOARD_KERNEL_HEADERS (Soong kernel_headers module) and the graphics HAL compiles against
+# drm/samsung_drm.h from it. A CP2A factory image carries no headers, so these come from the last AOSP tag
+# that shipped the family's kernel dir; assemble-kernel copies them into the assembled dir with this note.
+# Format: <family> <AOSP tag> <kernel build dir the headers came from>
+pantah android-15.0.0_r36 device/google/pantah-kernels/6.1/25Q1-13202328
+lynx android-15.0.0_r36 device/google/lynx-kernels/6.1/25Q1-13202328
+tangorpro android-15.0.0_r36 device/google/tangorpro-kernels/6.1/25Q1-13202328
+felix android-15.0.0_r36 device/google/felix-kernels/6.1/25Q1-13202328
+raviole android-15.0.0_r36 device/google/raviole-kernels/6.1/25Q1-13202328
+bluejay android-15.0.0_r36 device/google/bluejay-kernels/6.1/25Q1-13202328
+shusky android-15.0.0_r36 device/google/shusky-kernels/6.1/25Q1-13202328
+akita android-15.0.0_r36 device/google/akita-kernels/6.1/25Q1-13202328
+caimito android-15.0.0_r36 device/google/caimito-kernels/6.1/25Q1-13202328
+comet android-15.0.0_r36 device/google/comet-kernels/6.1/25Q1-13202328
+tegu android-15.0.0_r31 device/google/tegu-kernels/6.1/25D4

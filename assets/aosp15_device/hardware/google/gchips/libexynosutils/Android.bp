@@ -1,0 +1,62 @@
+// Copyright (C) 2008 The Android Open Source Project
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//      http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+package {
+    // See: http://go/android-license-faq
+    default_applicable_licenses: [
+        "hardware_google_gchips_libexynosutils_license",
+    ],
+}
+
+license {
+    name: "hardware_google_gchips_libexynosutils_license",
+    visibility: [":__subpackages__"],
+    license_kinds: [
+        "SPDX-license-identifier-Apache-2.0",
+    ],
+    license_text: [
+        "NOTICE",
+    ],
+}
+
+cc_library_shared {
+    name: "libexynosutils",
+    shared_libs: [
+        "liblog",
+        "libutils",
+        "libcutils",
+        "libhardware",
+    ],
+    proprietary: true,
+    cflags: [
+        "-DEXYNOS_PLATFORM_ON_ANDROID",
+        "-DUSES_GSCALER", // BOARD_USES_FIMC is never being set, ref hardware/google/gchips/BoardConfigCFlags.mk
+    ],
+    local_include_dirs: [
+        ".",
+    ],
+    include_dirs: [
+        "hardware/google/gchips/include",
+    ],
+    export_include_dirs: ["."],
+    srcs: [
+        "exynos_format_v4l2.c",
+        "ExynosMutex.cpp",
+        "Exynos_log.c",
+    ],
+    header_libs: [
+        "device_kernel_headers",
+        "libnativebase_headers",
+    ],
+}

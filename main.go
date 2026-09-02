@@ -80,6 +80,12 @@ func main() {
 		os.Exit(cmdReexport(args))
 	case "doctor":
 		os.Exit(cmdDoctor(args))
+	case "fetch-factory-image":
+		os.Exit(cmdFetchFactoryImage(args))
+	case "assemble-kernel":
+		os.Exit(cmdAssembleKernel(args))
+	case "extract-vendor":
+		os.Exit(cmdExtractVendor(args))
 	case "version", "-v", "--version":
 		fmt.Println("sovereign-lane-surgeon", version)
 	case "help", "-h", "--help":
@@ -105,6 +111,18 @@ SUBCOMMANDS:
   create                       Interactive scaffolder for a new sovereign lane (§23.1). With
                                -out, generates device/emu products + route manifest and STAGES
                                the in-place soong patches (preview-then-apply).
+  create -stock -devices <a,b> -out <root>  Revive a DROPPED/net-new device family VERBATIM (no
+                               "_<lane>" suffix, no finder/soong-config routing — there is no stock
+                               parallel to drop). No external AOSP tree required: every cp2a device
+                               family with an AOSP tree (Pixel 6 … Pixel 9a; r36, tegu from r31) plus
+                               gchips/graphics/pixel is embedded. -source-root overrides if given.
+                               Every device/google + hardware/google subtree the family references is
+                               mirrored too (transitively; upstream git projects left alone), then the
+                               target-release compatibility pass rewrites what the target tree is probed
+                               to reject (illegal cflags, system-partition props, AIDL sibling-version
+                               conflicts). -release <rel> + -factory-images-root <dir> add vendor blobs,
+                               the kernel prebuilt dir, and TARGET_LINUX_KERNEL_VERSION from the image.
+                               -kernel-version <ver>, -hw-subtrees <a,b> override/extend; all optional.
   uninstall -name <l> -out <root>  Fully reverse a seeded lane (dirs + shared products + AndroidProducts.mk
                                + soong patches, all surgical/multi-lane-safe). Byte-identical revert.
   apply   -out <aosp-root>     Commit the soong patches staged by 'create -out' onto the tree
@@ -120,6 +138,23 @@ SUBCOMMANDS:
                                no-Compose lane SystemUI bps carry stale external refs to libs that resolve
                                internally (Dagger/FQN) — drop the ref (points at an empty/absent lib).
   doctor  -report <dir|json>   Per classified failure, print (or apply) its recipe (§23.2).
+  fetch-factory-image -device <name> -out <dir>  Download+extract a Google Pixel factory image
+                               (known: the 16 cp2a devices with an AOSP tree — Pixel 6 … Pixel 9a) from a hand-verified
+                               manifest of real dl.google.com URLs + SHA-256 checksums (NOT a live
+                               scrape — see fetchfactoryimage.go for why). Prints Google's real
+                               terms and REFUSES to download until accepted ("I agree", or
+                               -i-accept-google-terms for scripted use). Writes <out>/<device>/,
+                               drop-in compatible with create -stock -factory-images-root <out>.
+  extract-vendor -device <d> -out <root> -factory-images-root <dir>
+                               Unpack vendor.img / vendor_dlkm.img / system_dlkm.img contents into
+                               vendor/google_devices/<d>/ — debugfs (no root) first, loop mount fallback.
+  assemble-kernel -device <d> -release <rel> -out <root> -factory-images-root <dir>
+                               Build the per-device kernel prebuilt dir the target release names
+                               (RELEASE_KERNEL_<DEVICE>_DIR, e.g. cp2a → pantah-kernels/6.1/26Q2-…)
+                               from the fetched factory image: boot.img/Image.lz4/dtbo.img, the
+                               first-stage modules out of vendor_kernel_boot.img, and the vendor_dlkm /
+                               system_dlkm module lists. Pure Go (no lz4 tool); refuses a build-id
+                               mismatch between the flag and the image. create -stock -release does the same.
   version
 
 The taxonomy + method are documented in holo_lane_sovereignty_handoff_20260711.md §22.
@@ -147,7 +182,7 @@ func cmdVerify(args []string) int {
 	fmt.Printf("lane=%s lunch=%s\n", r.Lane, r.LunchTarget)
 	fmt.Printf("dir_status=%s success=%v exit_code=%d duration=%.0fs\n", r.DirStatus, r.Success, r.ExitCode, r.DurationSec)
 	if r.green() {
-		fmt.Println("VERDICT: GREEN (full_completed)")
+		fmt.Printf("VERDICT: GREEN (%s)\n", r.DirStatus)
 		return 0
 	}
 	fmt.Println("VERDICT: NOT GREEN — run `audit` to classify the failures")
@@ -167,7 +202,20 @@ func cmdCreate(args []string) int {
 	forkExclude := fs.String("fork-exclude", "", "comma-separated subpaths to LEAVE stock inside a fork (namespace-complex, e.g. frameworks/base/packages/SystemUI)")
 	prefixDirs := fs.String("prefix-dirs", "", "physical directory prefix when KeepName is false (e.g. NexusM)")
 	noCompose := fs.Bool("no-compose", false, "experimental: bypass AndroidX/Compose (Nexus-Modern style — leave Compose/AndroidX subtrees stock, auto-drop their dep refs, scope SystemUI srcs to the re-authored kotlin/ tree)")
+	stock := fs.Bool("stock", false, "seed a DROPPED/net-new device family verbatim from -source-root instead of forking a lane — no \"_<lane>\" suffix, no finder/soong-config routing (there is no stock parallel to drop when the device never existed in the target tree)")
+	sourceRoot := fs.String("source-root", "", "stock mode: the AOSP tree to mirror device content FROM (required with -stock)")
+	kernelVersion := fs.String("kernel-version", "", "stock mode: set TARGET_LINUX_KERNEL_VERSION to this value in every mirrored device's product mk(s)")
+	hwSubtrees := fs.String("hw-subtrees", "", "stock mode: comma-separated non-device subtrees to mirror verbatim from -source-root (e.g. hardware/google/gchips,hardware/google/graphics)")
+	factoryImagesRoot := fs.String("factory-images-root", "", "stock mode: parent dir of per-device factory-image extraction dirs (<root>/<device>/...) to wire as vendor/google_devices/<device>/ blobs")
+	release := fs.String("release", "", "stock mode: target release config (the lunch's middle token, e.g. cp2a); with -factory-images-root, assembles the kernel prebuilt dir RELEASE_KERNEL_<DEVICE>_DIR names")
 	_ = fs.Parse(args)
+
+	if *stock {
+		return cmdCreateStock(stockArgs{
+			out: *out, sourceRoot: *sourceRoot, devices: *devices,
+			kernelVersion: *kernelVersion, hwSubtrees: *hwSubtrees, factoryImagesRoot: *factoryImagesRoot, release: *release,
+		})
+	}
 
 	printCreateIntro()
 

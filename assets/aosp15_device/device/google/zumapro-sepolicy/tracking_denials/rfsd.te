@@ -1,0 +1,2 @@
+# b/317735109
+dontaudit rfsd vendor_cbd_prop:file { read };

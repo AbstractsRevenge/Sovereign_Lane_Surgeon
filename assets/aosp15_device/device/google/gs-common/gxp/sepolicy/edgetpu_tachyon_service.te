@@ -1,0 +1,7 @@
+# Allow Tachyon service to access the GXP device and read GXP properties.
+allow edgetpu_tachyon_server gxp_device:chr_file rw_file_perms;
+get_prop(edgetpu_tachyon_server, vendor_gxp_prop)
+
+# Allow tachyon service to log to stats service for reporting metrics.
+allow edgetpu_tachyon_server fwk_stats_service:service_manager find;
+binder_call(edgetpu_tachyon_server, system_server);

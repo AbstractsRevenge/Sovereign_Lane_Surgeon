@@ -1,0 +1,2 @@
+# Support SW_LID event from SensorHAL to configure touch input and gesture
+set_prop(hal_sensors_default, vendor_gti_prop)

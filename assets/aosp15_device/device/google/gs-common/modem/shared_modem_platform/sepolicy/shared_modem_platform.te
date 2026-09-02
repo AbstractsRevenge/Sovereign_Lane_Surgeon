@@ -1,0 +1,2 @@
+# Shared modem platform will register the default instance of the AIDL ISharedModemPlatform hal.
+hal_server_domain(shared_modem_platform, hal_shared_modem_platform)

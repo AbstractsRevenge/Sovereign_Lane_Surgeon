@@ -1,0 +1,5 @@
+# Vendor policy statements a target platform neverallow forbids (secilc "neverallow check failed").
+# Tab-separated: <mirrored file>	<exact statement line>	<platform file>	<a line of the forbidding neverallow>	<note>
+# Applied by create -stock only when the platform file still contains that neverallow line; the statement is dropped verbatim.
+device/google/gs-common/storage/sepolicy/dumpstate.te	allow dumpstate vold:binder { call };	system/sepolicy/private/dumpstate.te	neverallow dumpstate {	android-17 adds "neverallow dumpstate { vold }:binder call" (private/dumpstate.te:488); android-15 had no such rule. Observed: cheetah full build 144400Z.
+device/google/gs-common/camera/sepolicy/vendor/vendor_pcs_app.te	binder_call(vendor_pcs_app, hal_pixel_remote_camera_service);	system/sepolicy/private/domain.te	neverallow * { -domain }:binder *;	hal_pixel_remote_camera_service is a service_manager_type, not a domain: "service names are not processes and do not host binder services" (private/domain.te). The service_manager add/find rules on it stay. Observed: cheetah full build 144400Z.

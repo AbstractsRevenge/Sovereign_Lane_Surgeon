@@ -1,0 +1,2 @@
+# Declares GIA related services
+type hal_gia_service, hal_service_type, protected_service, service_manager_type;

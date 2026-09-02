@@ -1,0 +1,12 @@
+# support intelligence service
+init_daemon_domain(storage_intelligence)
+type storage_intelligence, domain;
+type storage_intelligence_exec, vendor_file_type, exec_type, file_type;
+
+set_prop(storage_intelligence, vendor_intelligence_prop);
+
+allow storage_intelligence vendor_toolbox_exec:file execute_no_trans;
+
+# for storage management
+allow storage_intelligence block_device:dir { search };
+allow storage_intelligence userdata_exp_block_device:blk_file rw_file_perms;

@@ -1,0 +1,5 @@
+#Pogo USB control & status
+type sysfs_pogo_usb, sysfs_type, fs_type;
+
+# Avoid GPS se failed
+type sysfs_gps, sysfs_type, fs_type;

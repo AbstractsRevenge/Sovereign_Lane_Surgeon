@@ -1,0 +1,70 @@
+PRODUCT_COPY_FILES += \
+      hardware/google/pixel/common/init.pixel.rc:$(TARGET_COPY_OUT_VENDOR)/etc/init/init.pixel.rc
+
+BOARD_VENDOR_SEPOLICY_DIRS += hardware/google/pixel-sepolicy/common/vendor
+SYSTEM_EXT_PRIVATE_SEPOLICY_DIRS += hardware/google/pixel-sepolicy/common/system_ext
+
+# Enable atrace categories and tools for pixel devices
+PRODUCT_PACKAGES += \
+    atrace_categories.txt.pixel \
+    dmabuf_dump
+
+# fastbootd
+PRODUCT_PACKAGES += \
+    fastbootd
+
+# Enable RKP support
+PRODUCT_PRODUCT_PROPERTIES += \
+    remote_provisioning.hostname=remoteprovisioning.googleapis.com
+
+# Pixel Experience
+
+ifneq (,$(filter userdebug eng, $(TARGET_BUILD_VARIANT)))
+ifeq (,$(filter aosp_%,$(TARGET_PRODUCT)))
+PRODUCT_PACKAGES_DEBUG += wifi_diagnostic
+BOARD_VENDOR_SEPOLICY_DIRS += hardware/google/pixel-sepolicy/wifi_diagnostic
+endif
+endif
+
+PRODUCT_PACKAGES_DEBUG += wifi_sniffer
+BOARD_VENDOR_SEPOLICY_DIRS += hardware/google/pixel-sepolicy/wifi_sniffer
+
+PRODUCT_PACKAGES_DEBUG += wifi_perf_diag
+BOARD_VENDOR_SEPOLICY_DIRS += hardware/google/pixel-sepolicy/wifi_perf_diag
+
+# Enable whole-program R8 Java optimizations for SystemUI and system_server,
+# but also allow explicit overriding for testing and development.
+SYSTEM_OPTIMIZE_JAVA ?= true
+SYSTEMUI_OPTIMIZE_JAVA ?= true
+
+# Exclude features that are not available on AOSP devices.
+ifneq (,$(filter aosp_%,$(TARGET_PRODUCT)))
+PRODUCT_COPY_FILES += \
+    frameworks/native/data/etc/aosp_excluded_hardware.xml:$(TARGET_COPY_OUT_VENDOR)/etc/permissions/aosp_excluded_hardware.xml
+endif
+
+# Preopt SystemUI
+ifneq ($(RELEASE_SYSTEMUI_USE_SPEED_PROFILE), true)
+PRODUCT_DEXPREOPT_SPEED_APPS += SystemUIGoogle  # For internal
+PRODUCT_DEXPREOPT_SPEED_APPS += SystemUI        # For AOSP
+endif
+
+# Set on-device compilation mode for SystemUI.
+ifeq ($(RELEASE_SYSTEMUI_USE_SPEED_PROFILE), true)
+PRODUCT_PROPERTY_OVERRIDES += \
+    dalvik.vm.systemuicompilerfilter=speed-profile
+else
+PRODUCT_PROPERTY_OVERRIDES += \
+    dalvik.vm.systemuicompilerfilter=speed
+endif
+
+# Virtual fingerprint HAL
+PRODUCT_PACKAGES += com.android.hardware.biometrics.fingerprint.virtual
+
+# Virtual face HAL
+PRODUCT_PACKAGES += com.android.hardware.biometrics.face.virtual
+
+# AI Labs artifacts
+ifeq ($(RELEASE_INSTALL_AI_LABS_ARTIFACTS), true)
+  include vendor/google/AILabs/ai_labs.mk
+endif

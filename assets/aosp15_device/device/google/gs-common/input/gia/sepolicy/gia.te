@@ -1,0 +1,18 @@
+# SEPolicies for GIA (Google Input interface Abstraction layer)
+type gia, domain;
+type gia_exec, exec_type, vendor_file_type, file_type;
+
+# Macro transferring gia_exec to the gia domain
+init_daemon_domain(gia)
+
+# let this domain use the hal service
+hal_client_domain(gia, hal_gia)
+# allow binder communication with service_manager
+binder_use(gia)
+
+# let this domain serve the hal service
+hal_server_domain(gia, hal_gia)
+
+# allow gia for accessing touch related system file-nodes
+allow gia sysfs_touch_gti:dir r_dir_perms;
+allow gia sysfs_touch_gti:file rw_file_perms;

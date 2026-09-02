@@ -477,7 +477,7 @@ func mirrorSubtree(c LaneConfig, outRoot, stockSubtree string) (laneRel string, 
 		if !fi.Mode().IsRegular() {
 			return nil
 		}
-		if _, serr := os.Stat(target); serr == nil {
+		if _, serr := os.Stat(target); serr == nil || neutralizedByBak(target) {
 			return nil // no-clobber: keep the already-forked file
 		}
 		if cerr := copyFile(p, target); cerr != nil {

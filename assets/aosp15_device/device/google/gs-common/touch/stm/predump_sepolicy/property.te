@@ -1,0 +1,2 @@
+# touch predump script
+vendor_internal_prop(vendor_touch_dump_path_prop)

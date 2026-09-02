@@ -1,0 +1,137 @@
+// Copyright (C) 2021 The Android Open Source Project
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//      http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+package {
+    // See: http://go/android-license-faq
+    default_applicable_licenses: [
+        "hardware_google_graphics_common_hwc3_license",
+    ],
+}
+
+license {
+    name: "hardware_google_graphics_common_hwc3_license",
+    visibility: [":__subpackages__"],
+    license_kinds: [
+        "SPDX-license-identifier-Apache-2.0",
+    ],
+    license_text: [
+        "NOTICE",
+    ],
+}
+
+soong_config_module_type {
+    name: "hwc3_cc_binary",
+    module_type: "cc_binary",
+    config_namespace: "ANDROID",
+    value_variables: ["target_board_platform"],
+    properties: [
+        "include_dirs",
+    ],
+}
+
+hwc3_cc_binary {
+    name: "android.hardware.composer.hwc3-service.pixel",
+    srcs: [
+        "Composer.cpp",
+        "ComposerClient.cpp",
+        "ComposerCommandEngine.cpp",
+        "impl/HalImpl.cpp",
+        "impl/ResourceManager.cpp",
+        "service.cpp",
+    ],
+    relative_install_path: "hw",
+    proprietary: true,
+    vintf_fragments: ["hwc3-default.xml"],
+    init_rc: ["hwc3-pixel.rc"],
+
+    static_libs: ["libaidlcommonsupport"],
+
+    cflags: [
+        "-DLOG_TAG=\"hwc-3\"",
+        "-Wthread-safety",
+    ] + select(soong_config_variable("ANDROID", "target_board_platform"), {
+        any @ soc_ver: ["-DSOC_VERSION=" + soc_ver],
+        default: [],
+    }) + select(soong_config_variable("google_graphics", "board_uses_hwc_services"), {
+        any @ soc_ver: ["-DUSES_HWC_SERVICES"],
+        default: [],
+    }),
+
+    shared_libs: [
+        "android.hardware.graphics.composer3-V4-ndk",
+        "android.hardware.graphics.composer@2.1-resources",
+        "android.hardware.graphics.composer@2.2-resources",
+        "android.hardware.graphics.composer@2.4",
+        "android.hardware.drm-V1-ndk",
+        "//hardware/google/interfaces:com.google.hardware.pixel.display-V13-ndk",
+        "android.frameworks.stats-V2-ndk",
+        "//hardware/google/pixel:libpixelatoms_defs",
+        "//hardware/google/pixel:pixelatoms-cpp",
+        "libbase",
+        "libbinder",
+        "libbinder_ndk",
+        "libcutils",
+        "libfmq",
+        "libhardware",
+        "libhardware_legacy",
+        "liblog",
+        "libsync",
+        "libutils",
+    ] + select(soong_config_variable("ANDROID", "target_board_platform"), {
+        any @ soc_ver: ["//hardware/google/graphics/" + soc_ver + "/libhwc2.1:libexynosdisplay"],
+        default: ["libexynosdisplay"],
+    }) + select(soong_config_variable("google_graphics", "board_uses_hwc_services"), {
+        true: ["libExynosHWCService"],
+        default: [],
+    }),
+
+    header_libs: [
+        "android.hardware.graphics.composer3-command-buffer",
+        "google_hal_headers",
+        "//hardware/google/gchips/gralloc4:libgralloc_headers",
+        "device_kernel_headers",
+    ] + select(soong_config_variable("google_graphics", "board_uses_hwc_services"), {
+        true: ["libbinder_headers"],
+        default: [],
+    }),
+
+    include_dirs: [
+        "hardware/google/graphics/common/include",
+        "hardware/google/graphics/common/libhwc2.1",
+        "hardware/google/graphics/common/libhwc2.1/libdevice",
+        "hardware/google/graphics/common/libhwc2.1/libdisplayinterface",
+        "hardware/google/graphics/common/libhwc2.1/libdrmresource/include",
+        "hardware/google/graphics/common/libhwc2.1/libhwchelper",
+        "hardware/google/graphics/common/libhwc2.1/libhwcService",
+        "hardware/google/graphics/common/libhwc2.1/libresource",
+    ],
+
+    soong_config_variables: {
+        target_board_platform: {
+            include_dirs: [
+                "hardware/google/graphics/%s/include",
+                "hardware/google/graphics/%s/libhwc2.1",
+                "hardware/google/graphics/%s/libhwc2.1/libcolormanager",
+                "hardware/google/graphics/%s/libhwc2.1/libdevice",
+                "hardware/google/graphics/%s/libhwc2.1/libmaindisplay",
+                "hardware/google/graphics/%s/libhwc2.1/libresource",
+            ],
+        },
+    },
+
+    enabled: select(soong_config_variable("google_graphics", "board_hwc_version"), {
+        "hwc3": true,
+        default: false,
+    }),
+}

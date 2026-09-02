@@ -39,6 +39,18 @@ type LaneConfig struct {
 	NoCompose   bool     // OPTIONAL experimental premise: bypass AndroidX/Compose (Nexus-Modern style —
 	//              exclude/leave-stock the Compose/AndroidX/Jetpack subtrees, auto-drop their dep
 	//              refs, and scope SystemUI-class srcs to the re-authored View-in-Kotlin kotlin/ tree).
+
+	// Stock device revival (devicerevival.go): mirror a DROPPED/net-new device family verbatim
+	// from SourceRoot instead of forking a "_<lane>" parallel — there is no stock parallel to drop
+	// when the device never existed in the target tree at all. Mutually exclusive with the fields
+	// above in practice (a stock revival isn't a lane), but kept on the same struct per the
+	// project's rule of extending existing capability rather than adding a parallel config type.
+	Stock             bool     // true = stock device-revival mode (see writeStockScaffold)
+	SourceRoot        string   // the AOSP tree to mirror device content FROM
+	KernelVersion     string   // set TARGET_LINUX_KERNEL_VERSION to this in every mirrored device's product mk(s)
+	HWSubtrees        []string // non-device subtrees to mirror verbatim (e.g. hardware/google/gchips)
+	FactoryImagesRoot string   // parent dir of per-device factory-image extraction dirs (<root>/<device>/...), for vendor blob wiring
+	Release           string   // target release config (e.g. cp2a) — selects RELEASE_KERNEL_<DEVICE>_DIR for kernel prebuilt assembly
 }
 
 func deriveLane(name string, keepName bool, devices []string, goldfish, cuttlefish bool, dirPrefix string) LaneConfig {

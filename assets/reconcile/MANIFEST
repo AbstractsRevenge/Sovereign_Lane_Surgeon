@@ -1,0 +1,7 @@
+# Cross-tag reconciliations for families whose tree comes from a different AOSP tag than the shared
+# subtrees (see assets/aosp15_device.sources). Each line names ONE exact `include <path>` line in a
+# bundle makefile to drop when <path> does not exist in the target tree — because the shared tag
+# removed it and its own devices dropped the same include. Applied by `create -stock` only if the
+# path is really absent; the note carries the evidence.
+# Format: <makefile> <included-path> <note>
+device/google/tegu/device-tegu.mk hardware/google/pixel/vibrator/cs40l26/device.mk android-15.0.0_r36 dropped hardware/google/pixel/vibrator entirely, relocated its aconfig flag modules (VibratorFlagsL26, PixelVibratorFlagsL26) to device/google/gs-common/vibrator/flags under the same names, and none of its device makefiles include the source HAL: the vibrator service is the vendor blob android.hardware.vibrator-service.cs40l26, which tegu's CP2A factory image ships too. Keeping r31's include (Build Capture 130649Z) duplicates the flag package "vendor.vibrator.hal.flags" and Soong panics.

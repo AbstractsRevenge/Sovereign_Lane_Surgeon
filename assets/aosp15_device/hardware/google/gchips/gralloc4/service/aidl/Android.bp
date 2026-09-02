@@ -1,0 +1,79 @@
+package {
+    default_applicable_licenses: ["Android-Apache-2.0"],
+}
+
+soong_config_module_type_import {
+    from: "hardware/google/gchips/gralloc4/Android.bp",
+    module_types: ["gralloc_defaults"],
+}
+
+cc_defaults {
+    name: "allocator_gralloc4_defaults",
+    init_rc: [
+        "android.hardware.graphics.allocator-aidl-service.rc",
+    ],
+    vintf_fragments: ["manifest_gralloc_aidl.xml"],
+    shared_libs: [
+        "android.hardware.graphics.allocator-V1-ndk",
+        "android.hardware.graphics.allocator-aidl-impl",
+    ],
+    required: [
+        "android.hardware.graphics.allocator-aidl-impl",
+    ],
+}
+
+cc_defaults {
+    name: "allocator_gralloc5_defaults",
+    init_rc: [
+        "android.hardware.graphics.allocator2-aidl-service.rc",
+    ],
+    vintf_fragments: ["manifest_gralloc_aidl2.xml"],
+    shared_libs: [
+        "android.hardware.graphics.allocator-V2-ndk",
+        "android.hardware.graphics.allocator-aidl-impl",
+    ],
+    required: [
+        "android.hardware.graphics.allocator-aidl-impl",
+    ],
+}
+
+// Should only be used in pixel_gralloc_allocator because of 'stem'
+gralloc_defaults {
+    name: "allocator_version_defaults",
+    soong_config_variables: {
+        mapper_version: {
+            mapper4: {
+                stem: "android.hardware.graphics.allocator-V1-service",
+                defaults: ["allocator_gralloc4_defaults"],
+            },
+            mapper5: {
+                stem: "android.hardware.graphics.allocator-V2-service",
+                defaults: ["allocator_gralloc5_defaults"],
+            },
+        },
+    },
+}
+
+cc_binary {
+    name: "pixel_gralloc_allocator",
+    proprietary: true,
+    relative_install_path: "hw",
+    srcs: [
+        "service.cpp",
+    ],
+    defaults: [
+        "allocator_version_defaults",
+        "arm_gralloc_version_defaults",
+    ],
+    header_libs: [
+        "libgralloc_headers",
+    ],
+    shared_libs: [
+        "libbinder_ndk",
+        "liblog",
+        "libutils",
+    ],
+    static_libs: [
+        "libaidlcommonsupport",
+    ],
+}

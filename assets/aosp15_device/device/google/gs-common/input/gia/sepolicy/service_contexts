@@ -1,0 +1,2 @@
+# Attaches GIA services to the cooresponding SEPolicy group
+com.google.input.gia.core.IGiaService/default     u:object_r:hal_gia_service:s0

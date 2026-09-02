@@ -1,0 +1,10 @@
+# Devices
+/dev/lwis-act-nessie                                                        u:object_r:lwis_device:s0
+/dev/lwis-eeprom-nessie                                                     u:object_r:lwis_device:s0
+/dev/lwis-eeprom-smaug-leshen                                               u:object_r:lwis_device:s0
+/dev/lwis-eeprom-smaug-leshen-uw                                            u:object_r:lwis_device:s0
+/dev/lwis-flash-lm3644                                                      u:object_r:lwis_device:s0
+/dev/lwis-ois-nessie                                                        u:object_r:lwis_device:s0
+/dev/lwis-sensor-barghest                                                   u:object_r:lwis_device:s0
+/dev/lwis-sensor-leshen                                                     u:object_r:lwis_device:s0
+/dev/lwis-sensor-leshen-uw                                                  u:object_r:lwis_device:s0

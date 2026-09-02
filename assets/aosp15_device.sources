@@ -1,0 +1,36 @@
+# Provenance of every top-level directory in assets/aosp15_device: <path> <AOSP tag>
+# Pixel 9a (tegu) has its own release branch; its tree exists only under the android-15.0.0_r24/r25/r31 tags.
+device/google/akita android-15.0.0_r36
+device/google/akita-sepolicy android-15.0.0_r36
+device/google/bluejay android-15.0.0_r36
+device/google/bluejay-sepolicy android-15.0.0_r36
+device/google/caimito android-15.0.0_r36
+device/google/caimito-sepolicy android-15.0.0_r36
+device/google/comet android-15.0.0_r36
+device/google/comet-sepolicy android-15.0.0_r36
+device/google/felix android-15.0.0_r36
+device/google/felix-sepolicy android-15.0.0_r36
+device/google/gs101 android-15.0.0_r36
+device/google/gs101-sepolicy android-15.0.0_r36
+device/google/gs201 android-15.0.0_r36
+device/google/gs201-sepolicy android-15.0.0_r36
+device/google/gs-common android-15.0.0_r36
+device/google/lynx android-15.0.0_r36
+device/google/lynx-sepolicy android-15.0.0_r36
+device/google/pantah android-15.0.0_r36
+device/google/pantah-sepolicy android-15.0.0_r36
+device/google/raviole android-15.0.0_r36
+device/google/shusky android-15.0.0_r36
+device/google/shusky-sepolicy android-15.0.0_r36
+device/google/tangorpro android-15.0.0_r36
+device/google/tangorpro-sepolicy android-15.0.0_r36
+device/google/tegu android-15.0.0_r31
+device/google/tegu-sepolicy android-15.0.0_r31
+device/google/zuma android-15.0.0_r36
+device/google/zumapro android-15.0.0_r36
+device/google/zumapro-sepolicy android-15.0.0_r36
+device/google/zuma-sepolicy android-15.0.0_r36
+hardware/google/gchips android-15.0.0_r36
+hardware/google/graphics android-15.0.0_r36
+hardware/google/pixel android-15.0.0_r36
+hardware/google/pixel-sepolicy android-15.0.0_r36

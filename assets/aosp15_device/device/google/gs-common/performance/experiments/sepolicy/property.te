@@ -1,0 +1,3 @@
+# Properties shared between experiments.
+
+vendor_internal_prop(vendor_perf_allow_experiments_prop)

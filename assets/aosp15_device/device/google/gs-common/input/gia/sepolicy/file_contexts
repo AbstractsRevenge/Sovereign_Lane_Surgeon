@@ -1,0 +1,2 @@
+# chmod +x in SEPolicy language
+/vendor/bin/gia    u:object_r:gia_exec:s0

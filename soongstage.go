@@ -349,7 +349,13 @@ func copyFile(src, dst string) error {
 		return err
 	}
 	defer in.Close()
-	out, err := os.Create(dst)
+	fi, err := in.Stat()
+	if err != nil {
+		return err
+	}
+	// Keep the source's permission bits: an AOSP script mirrored as 0644 breaks kati's
+	// $(shell ...) invocations of it (the uwb country_conf_gen.sh case).
+	out, err := os.OpenFile(dst, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, fi.Mode().Perm())
 	if err != nil {
 		return err
 	}
@@ -357,7 +363,10 @@ func copyFile(src, dst string) error {
 		out.Close()
 		return err
 	}
-	return out.Close()
+	if err := out.Close(); err != nil {
+		return err
+	}
+	return os.Chmod(dst, fi.Mode().Perm())
 }
 
 func bytesEqual(a, b []byte) bool { return string(a) == string(b) }

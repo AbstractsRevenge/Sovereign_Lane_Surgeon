@@ -1,0 +1,3 @@
+# Toolchain the bundle's sources were built with at their AOSP tag (build/soong/cc/config/global.go ClangDefaultVersion).
+# create -stock compares this with the target's; a different clang means the mirrored code meets warnings it was never compiled against.
+clang clang-r536225 android-15.0.0_r36

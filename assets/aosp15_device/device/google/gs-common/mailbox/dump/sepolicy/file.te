@@ -1,0 +1,2 @@
+#
+type debugfs_tracing_instances_mailbox, sysfs_type, fs_type;

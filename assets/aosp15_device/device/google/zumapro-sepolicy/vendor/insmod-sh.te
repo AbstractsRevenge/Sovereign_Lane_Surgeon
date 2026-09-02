@@ -1,0 +1,4 @@
+allow insmod-sh self:capability sys_nice;
+allow insmod-sh kernel:process setsched;
+allow insmod-sh vendor_regmap_debugfs:dir search;
+dontaudit insmod-sh insmod-sh:key write;

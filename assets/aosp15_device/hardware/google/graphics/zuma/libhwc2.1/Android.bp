@@ -1,0 +1,107 @@
+// Copyright (C) 2022 The Android Open Source Project
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//      http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+soong_namespace {
+    imports: [
+        "hardware/google/gchips",
+        "hardware/google/graphics/common",
+    ],
+}
+
+package {
+    default_applicable_licenses: ["Android-Apache-2.0"],
+}
+
+filegroup {
+    name: "zuma_libhwc2_1_srcs",
+    srcs: [
+        "libmaindisplay/ExynosPrimaryDisplayModule.cpp",
+        "libresource/ExynosMPPModule.cpp",
+        "libresource/ExynosResourceManagerModule.cpp",
+        "libexternaldisplay/ExynosExternalDisplayModule.cpp",
+        "libdisplayinterface/ExynosDisplayDrmInterfaceModule.cpp",
+        "libcolormanager/DisplayColorModule.cpp",
+        "libdevice/ExynosDeviceModule.cpp",
+        "libdevice/HistogramController.cpp",
+    ],
+}
+
+cc_defaults {
+    name: "zuma_libhwc2_1_defaults",
+    srcs: [
+        ":zuma_libhwc2_1_srcs",
+        ":gs101_for_zuma_zumapro_libhwc2_1_srcs",
+        ":gs201_for_zuma_zumapro_libhwc2_1_srcs",
+    ],
+    cflags: [
+        "-DDISPLAY_COLOR_LIB=\"libdisplaycolor.so\"",
+    ],
+
+    header_libs: [
+        "gs201_graphics_histogram_header",
+    ],
+
+    include_dirs: [
+        "hardware/google/graphics/gs101/include/gs101",
+        "hardware/google/graphics/zuma/include",
+    ],
+
+}
+
+filegroup {
+    name: "zuma_for_zumapro_libhwc2_1_srcs",
+    srcs: [
+        "libresource/ExynosMPPModule.cpp",
+        "libresource/ExynosResourceManagerModule.cpp",
+        "libexternaldisplay/ExynosExternalDisplayModule.cpp",
+        "libdisplayinterface/ExynosDisplayDrmInterfaceModule.cpp",
+        "libcolormanager/DisplayColorModule.cpp",
+        "libdevice/ExynosDeviceModule.cpp",
+        "libdevice/HistogramController.cpp",
+    ],
+}
+
+cc_library_shared {
+    name: "libexynosdisplay",
+    srcs: [
+        ":zuma_libhwc2_1_srcs",
+        "//hardware/google/graphics/gs101/libhwc2.1:gs101_for_zuma_zumapro_libhwc2_1_srcs",
+        "//hardware/google/graphics/gs201/libhwc2.1:gs201_for_zuma_zumapro_libhwc2_1_srcs",
+    ],
+    cflags: [
+        "-DDISPLAY_COLOR_LIB=\"libdisplaycolor.so\"",
+    ],
+    header_libs: [
+        "//hardware/google/graphics/gs201:gs201_graphics_histogram_header",
+    ],
+    include_dirs: [
+        "hardware/google/graphics/gs101/include/gs101",
+        "hardware/google/graphics/zuma/include",
+    ] + [
+        // From original common which will use each soc's own folder.
+        "hardware/google/graphics/zuma/libhwc2.1",
+        "hardware/google/graphics/zuma/libhwc2.1/libmaindisplay",
+        "hardware/google/graphics/zuma/libhwc2.1/libexternaldisplay",
+        "hardware/google/graphics/zuma/libhwc2.1/libvirtualdisplay",
+        "hardware/google/graphics/zuma/libhwc2.1/libresource",
+        "hardware/google/graphics/zuma/libhwc2.1/libcolormanager",
+        "hardware/google/graphics/zuma/libhwc2.1/libdevice",
+        "hardware/google/graphics/zuma/libhwc2.1/libresource",
+        "hardware/google/graphics/zuma/libhwc2.1/libdisplayinterface",
+        "hardware/google/graphics/zuma",
+    ],
+    defaults: [
+        "libexynosdisplay_common_cc_default",
+    ],
+}

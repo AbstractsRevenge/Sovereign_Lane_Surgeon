@@ -5,3 +5,5 @@
 *.test
 *.out
 bin/
+/bpdropcflag
+/cmd/*/bpdropcflag

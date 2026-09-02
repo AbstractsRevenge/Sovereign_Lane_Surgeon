@@ -1,0 +1,43 @@
+//
+// Copyright (C) 2024 The Android Open Source Project
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//      http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+package {
+    default_applicable_licenses: ["Android-Apache-2.0"],
+}
+
+aconfig_declarations {
+    name: "VibratorFlagsL26",
+    package: "vendor.vibrator.hal.flags",
+    container: "vendor",
+    exportable: true,
+    srcs: ["VibratorFlags.aconfig"],
+}
+
+cc_aconfig_library {
+    name: "PixelVibratorFlagsL26",
+    aconfig_declarations: "VibratorFlagsL26",
+    vendor_available: true,
+    visibility: [
+        "//vendor:__subpackages__",
+        "//device/google/felix:__subpackages__",
+    ],
+}
+
+java_aconfig_library {
+    name: "PixelVibratorFlagsL26_java",
+    aconfig_declarations: "VibratorFlagsL26",
+    mode: "exported",
+    visibility: ["//vendor:__subpackages__"],
+}

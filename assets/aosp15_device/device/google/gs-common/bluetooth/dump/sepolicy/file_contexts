@@ -1,0 +1,2 @@
+# bt common hal dump_bt service
+/vendor/bin/dump/dump_bt           u:object_r:dump_bt_exec:s0

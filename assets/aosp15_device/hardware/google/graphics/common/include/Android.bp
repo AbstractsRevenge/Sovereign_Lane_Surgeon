@@ -1,0 +1,14 @@
+package {
+    default_applicable_licenses: ["Android-Apache-2.0"],
+}
+
+cc_library_headers {
+    name: "displaycolor_common_headers",
+    vendor_available: true,
+    export_include_dirs: [
+        ".",
+    ],
+    visibility: [
+        "//visibility:public",
+    ],
+}

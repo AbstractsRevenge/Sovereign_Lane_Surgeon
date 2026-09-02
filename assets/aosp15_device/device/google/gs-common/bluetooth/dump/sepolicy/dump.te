@@ -1,0 +1,12 @@
+# pixel bluetooth common hal service
+pixel_bugreport(dump_bt)
+
+allow hal_dumpstate_default vendor_bt_data_file:dir { open read search };
+allow hal_dumpstate_default vendor_bt_data_file:file read;
+allow dump_bt radio_vendor_data_file:dir create_dir_perms;
+allow dump_bt radio_vendor_data_file:file create_file_perms;
+allow dump_bt vendor_bt_data_file:dir r_dir_perms;
+allow dump_bt vendor_bt_data_file:file r_file_perms;
+allow dump_bt sscoredump_vendor_data_crashinfo_file:dir search;
+allow dump_bt sscoredump_vendor_data_coredump_file:dir r_dir_perms;
+allow dump_bt sscoredump_vendor_data_coredump_file:file r_file_perms;

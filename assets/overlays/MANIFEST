@@ -1,0 +1,6 @@
+# Soong-conversion overlays: files taken verbatim from an upstream commit that converted a subtree's
+# Android.mk modules to Android.bp, applied by `create -stock` ONLY when the target tree's Soong
+# denylists Android.mk under that subtree (build/soong/ui/build/androidmk_denylist.go) — a tree
+# that still accepts the makefiles keeps the mirrored bundle content untouched.
+# Format: <subtree> <source@commit> <note>
+hardware/google/graphics/common android.googlesource.com/platform/hardware/google/graphics/common@562ede8 Google's own conversion of hwc3 + libhwc2.1 (libExynosHWCService, hwcomposer.$(TARGET_BOARD_PLATFORM)) to Soong, with //namespace:module labels; proven green on android-17.0.0_r1 (2026-09-02). Carries the same commit's ExynosMPP.{cpp,h} delta so sources and Blueprints agree.

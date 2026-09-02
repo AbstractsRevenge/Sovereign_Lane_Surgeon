@@ -1,0 +1,3 @@
+include device/google/gs-common:/sepolicy/OWNERS
+
+adamshih@google.com

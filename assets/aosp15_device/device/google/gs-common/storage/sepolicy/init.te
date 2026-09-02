@@ -1,0 +1,4 @@
+# init
+allow init sysfs_scsi_devices_0000:file w_file_perms;
+
+dontaudit init intelligence_data_file:dir mounton;

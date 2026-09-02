@@ -1,0 +1,2 @@
+# This macro produces: define hal_gia, hal_gia_client, hal_gia_server
+hal_attribute(gia)

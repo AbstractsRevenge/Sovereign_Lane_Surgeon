@@ -358,6 +358,19 @@ func writeScaffold(c LaneConfig, outRoot string) int {
 			// .proto imports, C/C++ #includes and .mk paths do too, and those failures surface
 			// inside GENERATED files (a .pb.h whose #include still names the source lane).
 			runRelocateLaneSourcePaths(c, outRoot, c.FromLane)
+		} else {
+			// STOCK-SOURCED fork (holo2test, 2026-08-20 — the first one). The clause above was
+			// gated on -from, so a lane seeded from stock got NO non-bp relocation whatsoever and
+			// died deep in the C++ phase: 11 generated protobuf objects failed with
+			//   fatal error: 'frameworks/proto_logging/stats/atoms.pb.h' file not found
+			// because the cloned .proto files still imported the STOCK path, protoc resolved that
+			// against the stock tree and emitted a stock-shaped #include the lane-rooted -I could
+			// not satisfy. The failure is remote from the edit — it lands in a generated header
+			// nobody wrote — which is why it is worth doing at scaffold time, not by hand.
+			//
+			// The stock direction needs its own pass rather than reusing the lane→lane one,
+			// because `frameworks/` is not a lane-scoped token: see relocateStockPathsInFile.
+			runRelocateStockSourcePaths(c, outRoot)
 		}
 		// rename model only (no-op for keep-name): tier 1 installables (+overrides), then tier 2
 		// libraries (rename + repoint every dep ref in lockstep).
@@ -366,6 +379,11 @@ func writeScaffold(c LaneConfig, outRoot string) int {
 		runRenameFrameworkClass(c, outRoot)       // no-op: framework-class stays KEEP-NAME (Model-A hybrid)
 		runNoComposeDropDeps(c, outRoot)          // no-op unless -no-compose: drop dangling Compose dep refs
 		runNoComposeScopeSystemUISrcs(c, outRoot) // no-op unless -no-compose: scope SystemUI srcs to kotlin/**
+
+		// Build tools whose assumptions a hyphenated lane root violates. Not stock bugs and not
+		// fork mistakes — defects lane naming CREATES. Invisible to `m nothing`; they surface only
+		// when the tool runs, deep into ninja. See laneToolFixes.
+		runFixLaneCreatedDefects(c, outRoot)
 	}
 
 	// Route manifest — new file, lean drop-list seed (populate from build evidence later).
@@ -392,13 +410,12 @@ func writeScaffold(c LaneConfig, outRoot string) int {
 		fmt.Printf("\nTIP: pass -fork frameworks/<subtree>,packages/<subtree> to clone stock subtrees into\n     frameworks-%s/ + packages-%s/ (keep-name — verbatim, no ref rewrite).\n", c.Name, c.Name)
 	}
 	if c.KeepName {
-		forkedFwkBase := false
-		for _, f := range c.Forks {
-			if strings.HasPrefix(strings.TrimLeft(f, "/"), "frameworks/base") {
-				forkedFwkBase = true
-			}
-		}
-		if !forkedFwkBase {
+		// forkCovers, not HasPrefix(f, "frameworks/base"): the old test asked whether the FORK
+		// ENTRY starts with the subtree, so a whole-root `-fork frameworks` — which clones
+		// frameworks/base by definition — matched nothing and printed this warning as a FALSE
+		// POSITIVE, telling the user to fork a framework-class that was already forked.
+		// (holo2test, 2026-08-20.)
+		if !forkCovers(c.Forks, "frameworks/base") {
 			fmt.Printf("\n⚠ KEEP-NAME: this lane's lunch enables the aar.go framework-class suppressors, which hide\n")
 			fmt.Printf("  stock framework-res/framework/services EXPECTING a lane replacement. You MUST fork the\n")
 			fmt.Printf("  framework-class (-fork frameworks/base) or a full build fails with 'framework-minus-apex\n")

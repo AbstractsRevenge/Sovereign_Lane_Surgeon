@@ -57,7 +57,7 @@ The Sovereign Lane Surgeon is a self-contained Go toolkit for creating parallel 
 | AST operations | ✅ Working | Blueprint/Go AST patching (no regex) |
 | Uninstall/rollback | ✅ Working | Byte-identical reversal |
 | Audit/classification | ✅ Working | 17-class taxonomy for build failures |
-| Test suite | ✅ Working | 104 tests, all passing (`go test ./...`) |
+| Test suite | ✅ Working | 109 tests, all passing (`go test ./...`) |
 
 ### Device Revival (`create -stock`)
 | Component | Status | Details |

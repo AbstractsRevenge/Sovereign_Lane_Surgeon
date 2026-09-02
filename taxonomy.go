@@ -175,6 +175,69 @@ var Classes = []BlockerClass{
 		Sig:    re(`No rule to make target|target pattern contains no|missing required`),
 		Recipe: "kati resolves a module by literal name (required:/PRODUCT_BOOT_JARS/misc_prebuilt). Keep-name, or add a phony alias.",
 	},
+
+	// ── G. STOCK-SOURCED LANE ────────────────────────────────────────────────────────────────
+	// Every class below returned UNCLASSIFIED when holo2test — the first lane seeded from STOCK
+	// frameworks/ + packages/ instead of from an existing lane — was brought to green on
+	// 2026-08-20. A subtree fork never reaches them; a whole-root stock fork hits them in order.
+	{
+		Name: "lane-label-into-namespace-dir", Layer: "soong", Auto: true, LaneDefect: true,
+		Sig: re(`depends on undefined module "//(frameworks|packages)-[a-z0-9]+/`),
+		Recipe: "requalify repointed a //-qualified label at a lane dir whose Android.bp declares a soong_namespace. " +
+			"The finder DROPS such a lane bp and KEEPS the stock parallel, so the module is never loaded at the lane " +
+			"path even though the .bp defining it is right there on disk. Directory existence is NOT routing. Fixed at " +
+			"source (requalifyPath consults laneDirDeclaresNamespace); on an already-scaffolded lane, revert that one " +
+			"label to //frameworks/… .",
+	},
+	{
+		Name: "crosstree-qualified-dep-moved", Layer: "soong", Auto: false, LaneDefect: true,
+		Sig: re(`depends on undefined module "//(frameworks|packages)/`),
+		Recipe: "An UN-FORKED consumer (platform_testing, external/, test/) holds a qualified //frameworks/<dir>:<mod> " +
+			"label, but the fork moved that module into the lane namespace. Do NOT edit the stock consumer — un-fork the " +
+			"ONE directory defining the module so the stock label resolves (e.g. libs/systemui/viewcapturelib, keeping its " +
+			"UX-relevant siblings forked). Size it first: most //frameworks/…: refs from outside are __subpackages__/__pkg__ " +
+			"VISIBILITY specs, not deps, and are harmless (25 of 26 on holo2test).",
+	},
+	{
+		Name: "lane-proto-import-stock-path", Layer: "cxx", Auto: true, LaneDefect: true,
+		Sig: re(`fatal error: '(frameworks|packages)/[^']*\.pb\.h' file not found`),
+		Recipe: "The lane's cloned .proto files still import \"frameworks/…\", so protoc resolved against the STOCK tree and " +
+			"emitted a stock-shaped #include into a generated .pb.h the lane-rooted -I cannot satisfy. Run " +
+			"`requalify -name <lane> -out <root> -sources` (no -from) — the existence-guarded stock relocation. `create` " +
+			"now runs it automatically for stock-sourced lanes.",
+	},
+	// NOTE: no class here for "Duplicate files found for …" — the pre-existing `aidl-dual-supply`
+	// already matches it and fires first. An earlier revision added a duplicate class whose recipe
+	// warned "do NOT run -paths tree-wide", blaming a blueprint panic on the breadth of the rewrite.
+	// That diagnosis was WRONG (the panic was requalifyEmbedded reached with a stock laneMap; see
+	// requalify.go), and the class was dead code besides. Removed rather than left to mislead.
+	// For a WHOLE-ROOT fork the correct remedy is exactly what the README documents:
+	//   requalify -name <lane> -out <root> -paths        (existence-guarded; safe tree-wide)
+	// scoped with -subtree only when you want to limit blast radius, not because breadth is unsafe.
+	{
+		Name: "lane-artifact-path-requirement", Layer: "kati", Auto: true, LaneDefect: true,
+		Sig: re(`artifact path requirement`),
+		Recipe: "A product installs files outside its GSI artifact-path requirement — typically apps added to PRODUCT_PACKAGES " +
+			"that land in system/app/. PRODUCT_ENFORCE_ARTIFACT_PATH_REQUIREMENTS := relaxed does NOT cover it. Add " +
+			"PRODUCT_ARTIFACT_PATH_REQUIREMENT_ALLOWED_LIST += <path>% per offender (the failure text lists them exactly), " +
+			"as sdk_phone64_holo.mk already does.",
+	},
+	{
+		Name: "lane-allowlist-outside-build-soong", Layer: "soong", Auto: false, LaneDefect: true,
+		Sig: re(`violates neverallow requirements`),
+		Recipe: "A neverallow allowlist naming lane paths lives OUTSIDE build/soong — any Soong plugin in the tree may call " +
+			"AddNeverAllowRules (external/icu/build/icu.go does). The surgeon's soong patch set does not reach those. Grep for " +
+			"an existing '<root>-<other-lane>/' entry in a .go allowlist and add this lane's parallel beside it. Known sites: " +
+			"external/icu/build/icu.go, build/soong/aconfig/all_aconfig_declarations.go, build/soong/android/androidmk.go, " +
+			"build/soong/android/apex.go.",
+	},
+	{
+		Name: "stray-bp-under-aosp-root", Layer: "soong", Auto: true, LaneDefect: false,
+		Sig: re(`module "[^"]+" already defined`),
+		Recipe: "A second copy of lane sources sits somewhere the finder scans — a graveyard, backup or snapshot left INSIDE " +
+			"the AOSP root — so soong sees duplicate modules. Move it OUTSIDE the tree. Snapshot dirs holding only .go/.mk are " +
+			"safe; anything containing an Android.bp is not.",
+	},
 }
 
 // KNOWN GAP (2026-09, physical-device-revival session): "fabricated/incomplete stub content" was

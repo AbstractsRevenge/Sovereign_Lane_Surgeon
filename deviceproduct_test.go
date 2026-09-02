@@ -47,7 +47,10 @@ func TestGenDeviceProduct(t *testing.T) {
 		"PRODUCT_DEVICE := lynx",
 		"DEVICE_MANIFEST_FILE := device/google/lynx-holo/manifest.xml",
 		"ro.holo.framework=true",
-		"$(call inherit-product-if-exists, frameworks-holo/base/data/sounds/HoloAudio.mk)",
+		// Native curated audio (NOT a wildcard HoloAudio.mk bolt-on — that ships a contaminated superset).
+		"PRODUCT_PACKAGES += frameworks_sounds",
+		// Corrected 4.3 default (was the non-4.3 Aldebaran.ogg) — guards the contamination from regressing.
+		"ro.config.notification_sound=Tejat.ogg",
 		// SoC auto-filled + device-HW inherit use family=lynx — both match real lynx-holo.
 		"$(call inherit-product, device/google/gs201/aosp_common.mk)",
 		"$(call inherit-product, device/google/lynx-holo/device-lynx_holo.mk)",

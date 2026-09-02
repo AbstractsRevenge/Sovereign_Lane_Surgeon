@@ -231,21 +231,40 @@ PRODUCT_SYSTEM_PROPERTIES += ro.{{.Lane}}.framework=true
 
 # Lane identity sound defaults — land in PRODUCT_PRODUCT_PROPERTIES so they write LAST into
 # /product/etc/build.prop (loaded last on this device) and win at runtime over the inherited
-# aosp_product.mk defaults. TODO({{.Lane}}): pick the lane's ringtone/notification/alarm.
+# aosp_product.mk defaults.
+# ⚠️ These MUST name sounds that actually exist in the lane's curated native set (below), verified
+# against the lane's DONOR DEVICE — do NOT guess from a source tree (source trees are contaminated
+# supersets). e.g. a lane targeting real 4.3 pulls Themos/Tejat/Oxygen from a 4.3 donor device, NOT
+# the modern Pegasus/Aldebaran/Cesium (Aldebaran & Cesium aren't even in the 4.3 set). The values
+# below are a clean 4.3 PLACEHOLDER.
+# TODO({{.Lane}}): confirm the ringtone/notification/alarm against this lane's donor device.
 PRODUCT_PRODUCT_PROPERTIES += \
-    ro.config.ringtone=Pegasus.ogg \
-    ro.config.notification_sound=Aldebaran.ogg \
-    ro.config.alarm_alert=Cesium.ogg
+    ro.config.ringtone=Themos.ogg \
+    ro.config.notification_sound=Tejat.ogg \
+    ro.config.alarm_alert=Oxygen.ogg
 
-# Lane-sourced audio install: {{.CamelCase}}Audio.mk adds the lane-only sound set. The upstream
-# AllAudio.mk PRODUCT_COPY_FILES entries are stripped by a deferred filter-out — it must run
-# AFTER all inherit-product calls resolve (kati lazy eval), so keep it near end-of-file.
+# Lane-sourced audio install — NATIVE + CURATED. Ships the EXPLICIT file list in
+# frameworks-{{.Lane}}/base/data/sounds/Android.bp (prebuilt_media modules), pulled via frameworks_sounds.
+# ⛔ Do NOT scaffold a wildcard {{.CamelCase}}Audio.mk bolt-on: a $(wildcard) over the lane's sounds
+# tree ships WHATEVER files are present — a contaminated superset (post-era tones, 48k re-encodes) —
+# a defect a prior lane hit (a $(wildcard) shipped a post-era superset over its curated identity set).
+# The native prebuilt_media list is contamination-RESISTANT: extra files in the tree are simply never
+# listed, so never shipped. The lane's frameworks_sounds bp is finder-routed to REPLACE stock (stock
+# frameworks/base/data/sounds is dropped per-file); the upstream AllAudio.mk PRODUCT_COPY_FILES are
+# stripped by the deferred filter-out below.
+# ⚠️ frameworks_sounds MUST NOT appear in any $(filter-out ...) list, and this += must land AFTER the
+# inherit-product calls have populated PRODUCT_PACKAGES.
+PRODUCT_PACKAGES += frameworks_sounds
 # TODO({{.Lane}}): PRODUCT_COPY_FILES := $(filter-out frameworks/base/data/sounds/%,$(PRODUCT_COPY_FILES))
-$(call inherit-product-if-exists, frameworks-{{.Lane}}/base/data/sounds/{{.CamelCase}}Audio.mk)
 
 # Lane-sourced font install: replace the upstream Material font set with the lane family under
 # frameworks-{{.Lane}}/base/data/fonts/. TODO({{.Lane}}): filter out the upstream prebuilt_font
 # modules (Roboto-Regular.ttf, DroidSansMono.ttf, AndroidClock.ttf, fonts.xml, ...) first.
+# ⚠️ SAME-CLASS RISK as the audio bolt-on above: if {{.CamelCase}}Fonts.mk uses a $(wildcard) over the
+# lane fonts tree it will ship whatever files are present (contamination). Prefer a CURATED native
+# frameworks-{{.Lane}}/base/data/fonts/Android.bp (prebuilt_font, explicit list) pulled via
+# PRODUCT_PACKAGES — like frameworks_sounds above. TODO({{.Lane}}): audit the font mechanism +
+# build-verify before converting (fonts are boot-critical).
 $(call inherit-product-if-exists, frameworks-{{.Lane}}/base/data/fonts/{{.CamelCase}}Fonts.mk)
 
 # Lane-sourced demo videos at /system/media/video/ (modern AOSP ships none, so no filter needed).

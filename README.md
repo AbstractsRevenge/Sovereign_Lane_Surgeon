@@ -21,6 +21,12 @@ limitations under the License.
 
 A single self-contained Go binary. Zero external dependencies. `go build` and run.
 
+**v0.4.0** — stock-seeded lanes proven to a green full image. A whole-root fork of `frameworks/` +
+`packages/` (178,264 files) now reaches `m droid` with zero errors in every phase. Getting there
+surfaced sixteen distinct blocker classes; the automatable ones are applied by `create`, and all of
+them are written up in [What a stock-seeded lane hits](#what-a-stock-seeded-lane-hits-and-why) so the
+next lane — or the next reader — does not rediscover them one build at a time.
+
 ```
 git clone … && cd sovereign-lane-surgeon
 go build -o sovereign-lane-surgeon .
@@ -169,9 +175,25 @@ create ─┬─ name guard      refuse a lane name any existing directory alrea
         ├─ requalifier      //frameworks/base/…  →  //frameworks-<lane>/…   (fork-boundary aware,
         │                   AST-safe, form-preserving — vendored Blueprint parser). Covers labels
         │                   inside select() bodies, and with -paths also BARE root-relative paths
-        │                   (include_dirs) + paths embedded in genrule cmd strings
+        │                   (include_dirs, aidl.include_dirs) + paths embedded in genrule cmd
+        │                   strings. -paths is OFF by default because a SUBTREE fork rarely needs
+        │                   it; a WHOLE-ROOT fork almost always does (584 refs across 137 bp on a
+        │                   178k-file lane, vs 3 on the mature subtree-forked reference). It is
+        │                   existence-guarded, so it is safe to run tree-wide
         ├─ lane-source      (-from only) repoint the clone off its source lane + inherit that
         │                   lane's curated bp drop-list (its directory relocations)
+        ├─ stock-source     (no -from) relocate stock paths in NON-bp sources: .proto imports and
+        │                   C/C++ #includes of GENERATED headers. Existence-guarded, and
+        │                   PRODUCER-aware — a .pb.h/.proto.h never exists on disk, so the guard
+        │                   tests the .proto that emits it (runRelocateStockSourcePaths)
+        ├─ lane allowlists  DISCOVER shared-tree .go files carrying per-lane path lists (any Soong
+        │                   plugin may keep one — external/icu does) and insert this lane beside the
+        │                   existing entry. Discovery, not a fixed list: a .go holding a
+        │                   "<root>-<existing-lane>/" literal IS an allowlist. AST-verified,
+        │                   staged. Files the dedicated patchers own are excluded
+        ├─ lane-tool fixes  repair build tools whose assumptions a HYPHENATED lane root violates —
+        │                   streaming_proto's include guards, ProtoLogTool's hardcoded stock path.
+        │                   Byte-exact match-or-skip; defects lane naming CREATES (laneToolFixes)
         ├─ rename pass      (-rename only) installables (+overrides) + libs+dep-repoint through the
         │                   Blueprint AST; framework-class stays KEEP-NAME (Model-A hybrid)
         ├─ no-compose       (-no-compose only) leave Compose/AndroidX subtrees stock, auto-drop dangling
@@ -309,23 +331,178 @@ Every `m nothing` / `m droid` goes through **AOSP Build Capture** (lanes `aosp17
 
 ## Status
 
-- ✅ **Keep-name sovereignty (zero-flag)** — proven end-to-end on a real tree: a from-scratch lane forking `frameworks/base` (~46k files) reaches a **zero-flag, zero-error `m nothing`** (product config + full Soong analysis + kati). Every generated artifact is verified against the hand-built reference lane it mirrors.
+- ✅ **Keep-name sovereignty (zero-flag)** — proven end-to-end on a real tree at two scales: a subtree
+  fork of `frameworks/base` (~46k files) and a **whole-root fork of `frameworks/` + `packages/`
+  (178k files)**, both reaching zero-flag, zero-error Soong analysis + kati; the latter also reaching
+  a full green `m droid`. Every generated artifact is verified against the hand-built reference lane
+  it mirrors — **and that reference lane is the single most useful debugging instrument this tool
+  has.** When a stock-seeded lane misbehaves, diff it against a mature lane before theorising: the
+  mature lane is a working instance of the thing you are building.
 - ✅ **App-naming / rename (Model-A hybrid)** — installables + libs+dep-repoint AST-validated (round-trip clean on real SystemUI / `frameworks/base` / `services` blueprints); framework-class is keep-name (the stem/phony tier retired after it was proven to break `platform-bootclasspath`/`services`). Drove a real branded lane (Nexus-Modern, `frameworks-nexusm`/`packages-nexusm`, ~40 forked apps) to **zero-error `m nothing` Soong analysis**.
 - ✅ **`reexport` idiom** — one pass over the Nexus-Modern lane detected 41 replaced-app stock subtrees and auto-generated 35 correct keep-name re-export stubs, replacing hand-authored graph-coherence stubs.
 - ✅ **`-no-compose`** — AndroidX/Compose-bypass wiring (exclude-gen + auto drop-dep + SystemUI srcs-scope), unit-tested.
 - ✅ **`uninstall`** — byte-identical seed reversal, proven end-to-end; multi-lane-safe. ⚠️ It removes the lane **trees** as well as the patches — a full reversal, not a patch-only undo.
 - ✅ **Lane-sourced fork (`-from`)** — proven end-to-end: a 157,119-file lane cloned from a mature one reaches a zero-error `m nothing`, **with the source lane still green on a re-verify** (mutual isolation, both directions, measured — not assumed).
-- 🚧 **Full `m droid` compile + boot** — validates forked *content*, not just graph coherence.
+- ✅ **Full `m droid` — PROVEN (2026-08-20).** A **stock-seeded** lane (`holo2test`: whole-root fork of
+  `frameworks/` + `packages/`, **178,264 files**) reached a **green `m droid` emulator image** —
+  `[100% 35283/35283]`, zero soong/kati/javac/ninja errors, `system.img` 891M + `super.img` 1.8G.
+  This validates forked **content and toolchain**, not just graph coherence. Sixteen distinct blocker
+  classes were found and closed getting there; every one is documented in "What a stock-seeded lane
+  hits" below, and the automatable ones are now applied by `create`.
+  ⚠️ `dir_status` may report `completed_noop` on an INCREMENTAL run of a full build — the classifier
+  keys on ninja step count and under-reports when most steps are cached. Trust `[100% N/N]`, zero
+  failures, and the presence of the images.
 - ✅ **Namespace collapse in the keep-name apply** — a lane subtree declaring its own `soong_namespace` holds its modules out of the global namespace, so stock consumers naming them bare stop resolving. The keep-name route function now drops those declarations (keeping only genuine pods), matching the rule the mature lane arrived at — verified against that lane's real `Android.bp.list`, 11/11.
-- 🚧 **kati re-green + `reexport` edge cases** — the fork-everything campaign's flat-namespace tail (JNI / proto / FQ-label refs) + folding the live finder's app-naming routing (root-disposition / full-subtree-drop / apex-keep) back into the generation template.
+- ✅ **The fork-everything flat-namespace tail — CLOSED for the stock-seeded case (2026-08-20).** The
+  proto and FQ-label refs this line used to flag are now handled: `.proto` imports and generated-header
+  `#include`s by `runRelocateStockSourcePaths`, qualified labels by the namespace-aware `requalifyPath`
+  (with the `/pods/` carve-out), bare + embedded paths by `requalify -paths`. Verified by a green
+  `m droid` on a 178k-file whole-root fork.
+- 🚧 **`reexport` on a whole-root fork** — `reexport` is proven for the app-naming model (41 replaced
+  subtrees → 35 stubs on Nexus-Modern). It was never exercised by the stock-seeded keep-name bring-up,
+  so its behaviour there is untested rather than known-good.
+- 🚧 **Folding the live finder's app-naming routing** (root-disposition / full-subtree-drop / apex-keep)
+  back into the generation template.
+- 🗺️ **Roadmap** — a `doctor` that auto-detects danglers from build evidence, richer device-fork auto-fill.
 - ✅ **Stock device revival (`create -stock`)** — proven end-to-end reviving Panther/Cheetah (shared `pantah` family) and Lynx from a from-scratch `-out`, zero external AOSP tree: family + `-sepolicy` mirror, multi-product family de-dup, kernel-version reconciliation, and hw-subtree mirroring all verified idempotent (a re-run no-clobbers cleanly). Vendor-blob wiring (`-factory-images-root`) implemented against the real `self-extractors_*` mechanism; the system_ext.img-embedded blobs still need separate filesystem-image extraction (reported, not silently dropped).
 - ✅ **`fetch-factory-image`** — hand-verified manifest (4 devices, real dl.google.com URLs + SHA-256) with resumable download, checksum verification, zip-slip-safe nested extraction, and **vendor image content extraction** (v0.4.0). Unit-tested (extraction, inner-zip discovery, zip-slip rejection, checksum mismatch). End-to-end run on real Panther factory images (2026-09-01).
-- 🚧 **android-17 Panther `m nothing`** — lunch succeeds; Soong analysis currently fails on two undefined modules (`connection_manager`, `libgfxstream_backend`) whose definitions were disabled during the hand bring-up, not lost between releases. See the lessons section below.
+- ✅ **android-17 device revival at scale** — all 16 cp2a devices with an AOSP tree are `m nothing` green on android-17.0.0_r1 from `create -stock` alone, and full images (`m droid superimage`) have completed for cheetah, panther and lynx; the per-device evidence lives in CURRENT_STATE.md and the operations that made it possible are described above.
+- **`build.<product>.ninja.d` is a Blueprint inventory, not a product dependency list.** Soong parses every `Android.bp` the finder sees regardless of lunch target, so the 15 `aosp_panther` and 15 `aosp_cf_x86_64_only_phone` dependency files are identical. Diffing them tells you what the *tree* has, which is still useful: diffing pristine 17 against the tree on disk shows exactly which files hand edits removed or added.
+- **Never overwrite a project the target manifest ships.** The hand bring-up copied all of `hardware/google` from AOSP 15. Five of those directories (`apf`, `av`, `camera`, `gfxstream`, `interfaces`) are real 17 git projects; the copy left them hundreds of files off HEAD, and the 15 copies of `aemu` and the gfxstream guest code duplicated modules that 17 had moved into `external/mesa3d/src/gfxstream`. Disabling the "duplicate" Blueprint files to silence that then removed 17's own definitions. The fix is `git checkout` from the project's HEAD, not another copy from 15. Only directories absent from the target manifest (`gchips`, `graphics`, `pixel`, `pixel-sepolicy`, the `device/google/*` families) are revival payload.
+- **A green `m nothing` proves graph coherence for the whole tree, not for the device.** The undefined-module errors above come from cuttlefish-only modules; they block every product because analysis is global.
 - 🗺️ **Roadmap** — a `doctor` that auto-detects danglers from build evidence, richer device-fork auto-fill.
 
-Self-contained, **104 tests, zero external dependencies** (`go test ./...`).
+Self-contained, **109 tests, zero external dependencies** (`go test ./...`).
 
 `verify`/`audit` treat every Build Capture success status as green, including `completed_bootstrap`, the `m nothing` graph-coherence gate this loop runs on. `cmd/bpdropcflag` removes an exact cflag from every `cflags`/`cppflags` list in a Blueprint through the AST (android-17 rejects `-pedantic`, which AOSP 15 device trees still carry).
+
+## What a stock-seeded lane hits (and why)
+
+**Read this before forking whole roots.** `create -from <lane>` inherits a mature lane's accumulated
+fixes. `create -fork frameworks,packages` — seeded from **stock** — inherits none of them, and that is
+usually the *point* (a clean control for measuring a transformation). The price is re-encountering
+every defect the mature lane already solved, plus a class of defect the sovereignty model itself
+creates. All sixteen below were found bringing `holo2test` to a green `m droid`.
+
+### The organising insight: a forked tree carries its origin's identity where no `.bp` check can see
+
+Requalifying blueprints is the easy half. A verbatim clone also carries stock paths in `.proto`
+imports, C/C++ `#include`s of *generated* headers, `aidl.include_dirs`, hardcoded strings inside
+build tools, and file **modes**. Each fails *remote from its cause*, and — the part that costs
+cycles — **each needs a DIFFERENT existence predicate**:
+
+| reference form | what proves the lane owns the target | resolved by |
+|---|---|---|
+| `//path:mod` label | the lane bp is **in the routing receipt** (`.module_paths/Android.bp.list`) | Soong, against the loaded graph |
+| bare / embedded path (`include_dirs`, genrule `cmd`) | the lane **directory** exists | the compiler, against files on disk |
+| `.proto` import | the lane **`.proto`** exists | protoc |
+| `#include "*.pb.h"` / `"*.proto.h"` | the lane **`.proto`** exists — *never* the header | the compiler |
+| executable script | the source **mode** bit | the OS |
+
+Two traps live in that table. A `//` label and a bare path *look identical* but are resolved by
+different things — a label into a namespace-declaring dir must stay **stock** (the finder keeps the
+stock parallel), while a bare path into the same dir must be **relocated** (files are on disk
+regardless of routing). And a generated header **never exists in the source tree**, so an on-disk
+test against it silently declines every rewrite it should have made.
+
+### The sixteen classes
+
+**Routing — automated by `create`:**
+
+1. **Label into a namespace dir.** `requalify` repointed `//frameworks/libs/native_bridge_support/…`
+   onto the lane; the finder drops namespace-declaring lane bps and keeps the stock parallel, so the
+   module was "undefined" while its `.bp` sat on disk. **Directory existence is not routing.** Fixed
+   in `requalifyPath`, mirroring the finder exactly — including the `/pods/` carve-out, since
+   decomposition pods *stay* namespaced and loaded.
+2. **Cross-tree qualified dep.** An **un-forked** consumer (`platform_testing`) holds
+   `//frameworks/libs/systemui:view_capture_proto`; the fork moved the module into the lane
+   namespace. Don't edit the stock consumer — un-fork the one directory. **Size it first: 25 of 26
+   such refs were `__subpackages__`/`__pkg__` visibility specs, not deps.**
+3. **`.proto` imports** → `runRelocateStockSourcePaths`. Both roots — an early revision matched only
+   `frameworks/` and left 17 `packages/` imports.
+4. **Generated-header includes** (`.pb.h`, `.proto.h`) → same pass, producer-aware predicate.
+5. **Bare + embedded paths** → `requalify -paths` (safe tree-wide; existence-guarded).
+6. **`aidl.include_dirs`** → same. Both roots on the aidl path makes a type resolve twice.
+7. **Executable bit.** `copyFile` used `os.Create`, so **387 of 387** executables under `frameworks/`
+   arrived non-executable — silent until a genrule tried to *run* one, ~7,800 steps in.
+
+**Lane-created — automated by `create` (`laneToolFixes`):**
+
+8. **`streaming_proto` hyphen.** Include guards are built from the file path; `make_constant_name`
+   passes `-` through, so `frameworks-<lane>/` yields `ANDROID_FRAMEWORKS-<LANE>_…` — an **illegal C
+   macro**. Stock never hits it: AOSP has no hyphenated top-level dirs. **The naming convention that
+   makes lanes work is what breaks the generator.**
+9. **`ProtoLogTool`** asserts a hardcoded stock path is among its inputs.
+
+**Shared-tree allowlists — DISCOVERED and automated by `create`:**
+
+10. **Lane allowlists outside `build/soong`.** Any Soong plugin anywhere in the tree may keep its own
+    per-lane path list — `external/icu/build/icu.go` carries the `libandroidicu`/`libicuuc`
+    `AddNeverAllowRules` allowlists, and a lane missing from them fails with *"violates neverallow
+    requirements"*, an error naming neither the lane nor the file.
+
+    A **fixed list of known sites would be a false promise** — the next plugin to add one would not be
+    on it. `discoverLaneAllowlists` finds them from a property that is true by construction:
+
+    > a `.go` file already containing a `"<root>-<existing-lane>/…"` literal **is** a lane allowlist,
+    > and the new lane belongs beside that entry.
+
+    Self-maintaining: a plugin added upstream tomorrow is picked up the moment any lane registers in
+    it. Files the dedicated patchers already own (`finder.go`, `neverallow.go`, `visibility.go`,
+    `aar.go`) are excluded — **ownership beats pattern-matching**, since those are full of lane
+    literals by design and discovery would fight the purpose-built patch that understands their
+    structure. Snapshot/archive dirs are skipped: patching one is harmless but reports a site that
+    does not exist, which teaches a false map of the tree.
+
+    Insertions are AST-verified — the file is parsed before and **re-parsed after**, and a patch that
+    would not compile is refused rather than written. They stage like every other soong patch
+    (preview-then-apply).
+
+    On the live tree this finds **six** sites: `external/icu/build/icu.go`,
+    `build/soong/aconfig/all_aconfig_declarations.go` (whose comment literally says *"Extend this list
+    when a new lane subtree is added"*), `android/androidmk.go`, `android/apex.go`, `java/sdk.go`,
+    `kotlin/sdk.go`. **The last two were never found by hand** — the manual grep that located the
+    other four missed them, which is the case for automating discovery rather than curating a list.
+
+**Stock defects the mature lane already fixed — manual, and each fix must be NEUTRAL:**
+
+11. **`PhotopickerLib` `-Werror`** on a deprecated androidx API. Fix: `@Suppress("DEPRECATION")`.
+12. **`<uses-library>` mismatch.** An `androidx.wear.*` prebuilt AAR declares `wear-sdk` that the bp
+    never does. Fix: `optional_uses_libs: ["wear-sdk"]` — soong's own recommended remedy.
+    **Sweep by predicate, not by error**: "lane `android_app` + depends on `androidx.wear.*`" named
+    all three affected modules at once.
+13. **Artifact-path requirement.** Apps landing in `system/app/` violate the GSI requirement;
+    `PRODUCT_ENFORCE_ARTIFACT_PATH_REQUIREMENTS := relaxed` does **not** cover it. Add
+    `PRODUCT_ARTIFACT_PATH_REQUIREMENT_ALLOWED_LIST += <path>%`.
+14. **Stray `Android.bp` under the AOSP root.** A graveyard or snapshot left *inside* the tree makes
+    soong report duplicate modules. Keep snapshots outside; dirs holding only `.go`/`.mk` are safe.
+15. **Un-forked infra.** `proto_logging`, `libs/systemui/viewcapturelib` — see `defaultInfraExcludes`.
+16. **Blueprint `parallelVisit` panic** — *not* caused by rewrite breadth. It was `requalifyEmbedded`
+    reached with a **stock** `laneMap`, a map it was never designed for, corrupting interior segments
+    (`//frameworks/base/packages/SystemUI` → `…/base/packages-<lane>/SystemUI`). Guarded at the
+    function. Tree-wide `-paths` with the guard: 135 bp, **zero** corruption, no panic.
+
+> ⚠️ **Keeping a control lane faithful.** If the lane exists to *measure* a transformation, every fix
+> must be build-metadata or build-tooling only. On `holo2test` that meant taking soong's neutral
+> `optional_uses_libs` remedy rather than porting `frameworks-holo`'s library swap, and leaving
+> `ColorUtils.kt` stock rather than importing holo's relocation of colour authority. **Porting the
+> mature lane's *answers* destroys the very delta the control exists to expose** — port its *compile
+> fixes*, never its design decisions.
+
+### Method that worked, and method that wasted cycles
+
+- ⭐ **Diff against a mature lane before theorising.** It answers "should this be lane-pointed?" in one
+  command. Every time it was consulted the answer was immediate; every time it was skipped, a fix was
+  over-applied.
+- ⭐ **Scope by predicate, then verify the scope.** The row-shape tells you where a defect *could* be,
+  not where it *is*. Six of these needed a **narrower** scope than the pattern suggested — the aidl
+  sweep was 3 of 31 candidates, the build-tool fix 1 of 236. But the exec-bit fix was **387 of 387**,
+  because "the source bit was set" is a *fact*, not a heuristic. **Apply wholesale when the predicate
+  is exact; scope narrowly when it is a guess.**
+- ⭐ **Read the actual compile invocation.** The `-I` list named the culprit directly in two separate
+  investigations that had otherwise stalled on hypotheses about cached artifacts.
+- ⛔ **A count over one root is not a count over the lane.** A scan reporting hits from only
+  `frameworks/` in a two-root tree is incomplete, not clean.
 
 ## Lessons from the android-17 revival
 

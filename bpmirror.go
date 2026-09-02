@@ -47,20 +47,68 @@ import (
 // the keep-name model can't repoint (the RENAME model forks + renames it instead, so it is only
 // excluded for keep-name). Merged with any user -fork-exclude so users don't rediscover these
 // one build at a time.
-func defaultInfraExcludes(c LaneConfig) []string {
-	forksBase := false
-	for _, f := range c.Forks {
-		if strings.HasPrefix(strings.TrimLeft(f, "/"), "frameworks/base") {
-			forksBase = true
+// forkCovers reports whether the fork list causes `sub` to be cloned into the lane — i.e. some
+// fork entry IS sub, or is an ANCESTOR of it. Separator-aware in both directions: a whole-root
+// fork ("frameworks") covers "frameworks/base", and "frameworks/base" never matches a sibling
+// like "frameworks/baseline".
+//
+// ⭐ THE BUG THIS REPLACES (holo2test, 2026-08-20). The old test was
+// `strings.HasPrefix(f, "frameworks/base")` — it asked whether the FORK ENTRY starts with the
+// subtree, which is exactly backwards for a whole-root fork. `-fork frameworks` clones
+// frameworks/base by definition, yet matched nothing: NONE of the infra excludes below fired,
+// and the keep-name warning in scaffold.go printed a false positive telling the user to fork a
+// framework-class that was already forked. This is the banked separator/prefix trap — store the
+// prefix bare and let the matcher append "/", so a row cannot get it wrong.
+func forkCovers(forks []string, sub string) bool {
+	sub = strings.Trim(strings.TrimSpace(sub), "/")
+	for _, f := range forks {
+		f = strings.Trim(strings.TrimSpace(f), "/")
+		if f == "" {
+			continue
+		}
+		if f == sub || strings.HasPrefix(sub, f+"/") {
+			return true
 		}
 	}
+	return false
+}
+
+func defaultInfraExcludes(c LaneConfig) []string {
 	var ex []string
-	if forksBase {
+	if forkCovers(c.Forks, "frameworks/base") {
 		ex = []string{"frameworks/base/ravenwood", "frameworks/base/tools/hoststubgen"}
 		if c.KeepName {
 			ex = append(ex, "frameworks/base/packages/SystemUI")
 		} else {
 			ex = append(ex, "frameworks/base/api")
+		}
+	}
+	// ─── WHOLE-ROOT FORK EXCLUDES ────────────────────────────────────────────────────────────
+	// Proven on holo2test (2026-08-20), the first lane seeded from STOCK frameworks/ + packages/
+	// rather than from an existing lane. A subtree fork never reached these; a whole-root fork
+	// takes them by default and each one costs a build cycle to discover.
+	//
+	//  • proto_logging — telemetry atoms, zero UX relevance, and BOTH frameworks-holo and
+	//    frameworks-holotest leave it stock. Forking it makes protoc resolve
+	//    `import "frameworks/proto_logging/…"` against the stock tree and emit a stock-shaped
+	//    #include into a generated .pb.h that the lane-rooted -I cannot satisfy: 11 objects fail
+	//    with `'frameworks/proto_logging/stats/atoms.pb.h' file not found`.
+	//
+	//  • libs/systemui/viewcapturelib — defines view_capture_proto, which UN-FORKED
+	//    platform_testing references as the qualified label
+	//    `//frameworks/libs/systemui:view_capture_proto`. Forking it moves the module into the
+	//    lane namespace while the consumer still names the stock one. Its siblings (monet,
+	//    iconloaderlib, animationlib, tracinglib) are real UX surface and stay forked — the
+	//    exclude is deliberately ONE directory deep, not the whole libs/systemui tree.
+	// ⛔ proto_logging is deliberately NOT excluded. An earlier revision excluded it because a
+	// forked proto_logging made protoc emit stock-shaped #includes — but runRelocateStockSourcePaths
+	// fixes that properly, so the exclude was a workaround for a solved problem and would have
+	// permanently barred every future lane from forking it. Removed 2026-08-20.
+	for _, sub := range []string{
+		"frameworks/libs/systemui/viewcapturelib",
+	} {
+		if forkCovers(c.Forks, sub) {
+			ex = append(ex, sub)
 		}
 	}
 	// NOTE: the Compose/AndroidX/Jetpack "vendored" excludes are NO LONGER unconditionally appended here
@@ -578,4 +626,88 @@ func runMirror(c LaneConfig, outRoot string, forks []string) (copied, nsWrote in
 	w, _, fatalNs := ensureRootNamespace(c, outRoot, roots)
 	nsWrote = w
 	return copied, nsWrote, fatalNs
+}
+
+// ─────────────────────────────────────────────────────────────────────────────────────────────
+// LANE-CREATED DEFECTS — build tools whose assumptions a hyphenated parallel tree violates.
+//
+// These are neither stock bugs nor fork mistakes. They are defects that LANE SOVEREIGNTY ITSELF
+// CREATES: a lane root is "frameworks-<lane>", and AOSP has no hyphenated top-level directories,
+// so no upstream tool ever had to tolerate one. They are invisible to every blueprint-level check
+// and to `m nothing` — they only surface when the tool RUNS, thousands of ninja steps in.
+//
+// Each entry below cost a full build cycle to find on holo2test (2026-08-20) and is a one-line fix
+// that frameworks-holo already carries. Applying them at scaffold time is strictly better than
+// rediscovering them per lane.
+// ─────────────────────────────────────────────────────────────────────────────────────────────
+
+// laneToolFix is a byte-exact, match-or-skip repair to a forked build tool. Exact-match only —
+// never a fuzzy rewrite — so it cleanly no-ops on an AOSP version whose source differs.
+type laneToolFix struct {
+	name string
+	rel  string // path under the lane root
+	old  string
+	new  func(lane string) string
+	why  string
+}
+
+var laneToolFixes = []laneToolFix{
+	{
+		name: "streaming_proto hyphen guard",
+		rel:  "base/tools/streaming_proto/cpp/main.cpp",
+		old:  "    header = replace_string(header, '.', '_') + \"_stream_h\";\n",
+		new: func(lane string) string {
+			return "    header = replace_string(header, '.', '_');\n" +
+				"    // sovereign-lane-surgeon: a lane root is \"frameworks-" + lane + "\", and\n" +
+				"    // make_constant_name passes '-' through unchanged, so the include guard becomes\n" +
+				"    // ANDROID_FRAMEWORKS-" + strings.ToUpper(lane) + "_... — an ILLEGAL C macro name\n" +
+				"    // (\"extra tokens at end of #ifndef\"). Stock never hits this: it has no hyphenated\n" +
+				"    // top-level dirs. The hyphen exists only because of lane naming.\n" +
+				"    header = replace_string(header, '-', '_') + \"_stream_h\";\n"
+		},
+		why: "generated .proto.h include guards are built from the file path; a hyphen makes them illegal C",
+	},
+	{
+		name: "ProtoLogTool lane source path",
+		rel:  "base/tools/protologtool/src/com/android/protolog/tool/ProtoLogTool.kt",
+		old:  "\"frameworks/base/core/java/com/android/internal/protolog/ProtoLogImpl.java\"",
+		new: func(lane string) string {
+			return "\"frameworks-" + lane + "/base/core/java/com/android/internal/protolog/ProtoLogImpl.java\""
+		},
+		why: "the tool asserts a hardcoded STOCK path is among its inputs; a lane feeds it lane-located sources",
+	},
+}
+
+// runFixLaneCreatedDefects applies laneToolFixes to the lane's forked build tools. Skips silently
+// when the lane did not fork the tool, or when the source no longer matches byte-exactly (AOSP
+// version drift) — reporting either, never guessing.
+func runFixLaneCreatedDefects(c LaneConfig, outRoot string) (applied int) {
+	root := filepath.Join(outRoot, "frameworks-"+c.Name)
+	if fi, err := os.Stat(root); err != nil || !fi.IsDir() {
+		return 0
+	}
+	fmt.Printf("\nlane-created defect fixes (build tools that assume un-hyphenated stock paths):\n")
+	for _, fx := range laneToolFixes {
+		p := filepath.Join(root, fx.rel)
+		b, err := os.ReadFile(p)
+		if err != nil {
+			fmt.Printf("  = %-30s not forked by this lane — skipped\n", fx.name)
+			continue
+		}
+		s := string(b)
+		if strings.Contains(s, "sovereign-lane-surgeon:") || strings.Contains(s, "frameworks-"+c.Name+"/base/core/java/com/android/internal/protolog") {
+			fmt.Printf("  = %-30s already applied\n", fx.name)
+			continue
+		}
+		if strings.Count(s, fx.old) != 1 {
+			fmt.Printf("  ! %-30s source not in the known form (%d matches) — SKIPPED, apply by hand\n", fx.name, strings.Count(s, fx.old))
+			fmt.Printf("      why it matters: %s\n", fx.why)
+			continue
+		}
+		if os.WriteFile(p, []byte(strings.Replace(s, fx.old, fx.new(c.Name), 1)), 0o644) == nil {
+			fmt.Printf("  + %-30s %s\n", fx.name, fx.why)
+			applied++
+		}
+	}
+	return applied
 }

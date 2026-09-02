@@ -160,5 +160,5 @@ func printScaffoldPlan(c LaneConfig) {
 		fmt.Printf("   5. cuttlefish: aosp_cf_x86_64_phone_%s + _tablet_%s (shared cuttlefish tree; launch --config=tablet)\n", c.Name, c.Name)
 	}
 	fmt.Printf("   6. verify: aosp_build_capture -lane %s -build-cmd 'm -jN nothing' → then `audit` to enumerate fork gaps\n", c.Name)
-	fmt.Println("\n(Foundation build: config + plan only. Steps 1–5 file generation land in the next increment;\n the audit/verify + taxonomy are already functional — see `audit -h`.)")
+	fmt.Println("\n(Dry run — nothing was written. Re-run with -out <aosp-root> to generate: bp mirror,\n device/emu products, requalify + stock-source relocation, lane-tool fixes, route manifest,\n and the STAGED soong patches. Then `apply -out <root>` commits those patches.)")
 }

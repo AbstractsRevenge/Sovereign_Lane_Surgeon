@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 
 	parser "github.com/abstractsrevenge/sovereign_lane_surgeon/internal/blueprint/parser"
@@ -97,6 +98,20 @@ func requalifyEmbedded(s string, laneMap map[string]string) string {
 		if srcRoot == "" {
 			continue
 		}
+		// ⭐ ONLY a LANE-SCOPED token may be replaced mid-string. This function silently relied
+		// on being called with a lane→lane map, where the token ("frameworks-holo/") cannot occur
+		// anywhere but at a path root. A STOCK root has no such property: "packages/" appears as
+		// an INTERIOR segment throughout the tree, so an unguarded ReplaceAll turns
+		//     //frameworks/base/packages/SystemUI/aconfig:flags
+		// into
+		//     //frameworks-<lane>/base/packages-<lane>/SystemUI/aconfig:flags
+		// — corrupting a path it was only supposed to re-root. Caught by TestRequalify the moment
+		// the stock pass enabled bare paths (holo2test, 2026-08-20): the banked substring trap,
+		// firing on the surgeon's own matcher. Guarded here rather than at the call site so no
+		// future caller can reintroduce it.
+		if !strings.Contains(srcRoot, "-") {
+			continue
+		}
 		s = strings.ReplaceAll(s, srcRoot+"/", dstRoot+"/")
 	}
 	return s
@@ -125,11 +140,58 @@ func requalifyPath(body, lead, outRoot string, laneMap map[string]string, cache 
 			cache[lanePath] = exists
 		}
 		if exists {
+			// ⭐ NAMESPACE GUARD — directory existence is NOT routing (holo2test, 2026-08-20).
+			// The finder DROPS a lane bp that declares a soong_namespace and KEEPS the stock
+			// parallel; that is deliberate, and the lane-root Android.bp template says so in its
+			// own comment ("modules collapse to the global namespace … while keeping the stock
+			// parallel for shared consumers"). So a //<lane-path>:<mod> label names a bp that is
+			// never loaded at that path. requalify was fork-boundary aware but not namespace-aware
+			// and repointed
+			//   //frameworks/libs/native_bridge_support/android_api/libc:native_bridge_proxy_libc_defaults
+			// onto the lane, after which soong called the module "undefined" while the .bp
+			// defining it sat right there on disk at line 151.
+			//
+			// Only the QUALIFIED form is gated, and the distinction is the point: a `//path:mod`
+			// label is resolved by SOONG against the loaded module graph, so it is bound by which
+			// bp the finder actually loaded. A BARE path is resolved by the COMPILER against files
+			// on disk, which are present regardless of routing — so relocating a bare path stays
+			// correct even into a namespace-declaring dir. Same string, two different resolvers.
+			// MIRRORS THE FINDER EXACTLY: apply<Lane>BpRoutes drops a namespace-declaring lane bp
+			// UNLESS is<Lane>OwnedNamespaceBp(bp) — which is `strings.Contains(bp, "/pods/")`.
+			// Decomposition pods stay namespaced AND stay loaded, so a label into a pod must name
+			// the LANE; a label into any other namespace dir must stay STOCK. Verified against the
+			// live routing receipt on holo2test: 18 namespace bps, 5 pods LOADED, 13 dropped.
+			// Getting this wrong in either direction is a build error — too broad reverts the pods
+			// (5 "depends on undefined module" at soong), too narrow leaves the native_bridge_support
+			// label pointing at a bp the finder never loads.
+			if modPart != "" && !strings.Contains("/"+lanePath, "/pods/") &&
+				laneDirDeclaresNamespace(outRoot, lanePath, cache) {
+				return orig
+			}
 			return lead + lanePath + modPart
 		}
 		return orig // target not forked — keep the original
 	}
 	return orig
+}
+
+// laneDirDeclaresNamespace is the DIRECTORY-keyed, memoised form of reexport.go's
+// laneBpDeclaresNamespace. Cached under an "ns:" key so the hot path stays O(1); the prefix keeps
+// it from colliding with the directory-existence entries sharing this map.
+//
+// ⭐ Note what this means: reexport.go already encoded the rule — its doc says the finder
+// "collapses such a lane bp to root and never drops a stock parallel against it, so the re-export
+// must not treat it as dropping stock either." The invariant was known and honoured in ONE
+// subsystem; requalify simply never consulted it. This is a sibling applying a rule its neighbour
+// already had, not a new discovery.
+func laneDirDeclaresNamespace(outRoot, lanePath string, cache map[string]bool) bool {
+	key := "ns:" + lanePath
+	if v, ok := cache[key]; ok {
+		return v
+	}
+	v := laneBpDeclaresNamespace(filepath.Join(outRoot, lanePath, "Android.bp"))
+	cache[key] = v
+	return v
 }
 
 // requalifyFile rewrites all qualified labels in one bp; returns whether it changed. When
@@ -265,6 +327,41 @@ func runRequalify(c LaneConfig, outRoot string) (changed, failed int) {
 			if e != nil || fi.IsDir() || filepath.Base(p) != "Android.bp" {
 				return nil
 			}
+			// barePaths=false here is DELIBERATE and correct for the configuration this pass was
+			// designed for — a SUBTREE fork. Contrast runRequalifyFromLane, which passes true.
+			// The asymmetry follows from what a stale bare path MEANS in each direction:
+			//
+			//   lane-sourced clone : `include_dirs: ["frameworks-<src>/rs"]` resolves against the
+			//                        SOURCE LANE's files, still on disk (the finder only stops
+			//                        scanning their Android.bp). It compiles green against the wrong
+			//                        tree — silently non-sovereign. See requalifyBarePath's doc.
+			//                        Mandatory, hence true.
+			//   stock-sourced fork : `include_dirs: ["frameworks/base/core/java"]` resolves against
+			//                        STOCK, which is the CORRECT fallback for anything the lane did
+			//                        not fork. For a subtree fork that is most of them, so a blanket
+			//                        rewrite would be mostly no-ops. Hence false.
+			//
+			// ⚠️ A WHOLE-ROOT fork (-fork frameworks,packages) inverts that ratio: nearly every bare
+			// stock path now HAS a lane parallel, and each one is a dual supplier — two roots feeding
+			// the same header or aidl type. Measured on holo2test (2026-08-20, 178k files): 584 such
+			// refs across 137 bp, where the mature keep-name reference lane frameworks-holo carries 3.
+			// Symptoms are remote from the cause — `Duplicate files found for …IGeofenceHardware`, and
+			// `redefinition of FloatRect` where a #pragma once header exists under two paths.
+			//
+			// ⇒ This is a CONFIGURATION the pass predates, not a defect in it. requalifyPath already
+			// gates every rewrite on the lane parallel EXISTING, so `requalify -paths` is safe to run
+			// for a whole-root fork and is the documented instrument for it (README: "with -paths also
+			// BARE root-relative paths (include_dirs) + paths embedded in genrule cmd strings").
+			// It stays off HERE so a subtree fork keeps its conservative default.
+			//
+			// ⛔ HISTORICAL NOTE, corrected: an earlier revision of this comment claimed tree-wide
+			// -paths "changes the dependency graph far beyond the modules that needed it", citing a
+			// blueprint panic (parallelVisit ran 142724, expected 142736). That was a WRONG diagnosis
+			// inferred from a symptom. The panic came from requalifyEmbedded being reached with a
+			// STOCK laneMap — a map it was never designed for — whose mid-string ReplaceAll corrupted
+			// interior segments (//frameworks/base/packages/SystemUI → …/base/packages-<lane>/SystemUI),
+			// making those modules unreachable. With the guard in requalifyEmbedded, the same tree-wide
+			// run repointed 135 bp with ZERO corrupted paths and NO panic. Breadth was never the issue.
 			ch, ferr := requalifyFile(p, outRoot, laneMap, cache, false, "", false)
 			if ferr != nil {
 				failed++
@@ -406,4 +503,136 @@ func runRelocateLaneSourcePaths(c LaneConfig, outRoot, srcLane string) (changed 
 	}
 	fmt.Printf("  %d file(s) rewritten.\n", changed)
 	return changed
+}
+
+// ─────────────────────────────────────────────────────────────────────────────────────────────
+// STOCK-SOURCED relocation (`create -fork <stock subtrees>` with no -from)
+//
+// PROVEN ON: holo2test, 2026-08-20 — the first lane seeded from STOCK frameworks/ + packages/
+// (178,264 files, whole-root fork) driven to a green `m droid` emulator image.
+//
+// WHY THE STOCK DIRECTION NEEDS ITS OWN PASS. A lane→lane relocate (relocateLaneSourcePaths)
+// replaces UNCONDITIONALLY, because its token `frameworks-<src>/` is lane-scoped: it cannot occur
+// inside a reference that must stay put. The stock token `frameworks/` has no such property — it
+// appears in EVERY reference, including ones that MUST keep pointing at stock (a subtree the lane
+// deliberately did not fork). So every rewrite here is gated on the lane parallel EXISTING.
+//
+// ⭐ AND THE GUARD MUST TEST THE RIGHT ARTIFACT. For a GENERATED header the file never exists in
+// the source tree — it only appears in the out dir after its generator runs — so an on-disk test
+// against the header always fails and silently declines a rewrite that was required. The guard has
+// to test the PRODUCER instead. Measured cost of getting this wrong: 37 `.pb.h` + 30 `.proto.h`
+// includes silently skipped, surfacing thousands of ninja steps later as `file not found` inside
+// files nobody wrote.
+// ─────────────────────────────────────────────────────────────────────────────────────────────
+
+// stockRelocSpec is one relocatable reference form: how to find it, and which artifact proves the
+// lane owns the target. Keeping the producer mapping beside the pattern is what stops a future
+// reader re-deriving "why does a .pb.h test a .proto?".
+type stockRelocSpec struct {
+	name string
+	exts []string       // file types to scan
+	re   *regexp.Regexp // groups: 1=lead 2=root 3=path 4=trail
+	// producer maps a referenced path to the artifact whose existence proves lane ownership.
+	// Identity for real files; for generated headers it maps back to the source that emits them.
+	producer func(string) string
+}
+
+func identityProducer(rel string) string { return rel }
+
+// generatedHeaderProducer maps a generated C/C++ header back to the .proto that emits it.
+// Two generators are in play in AOSP and they use DIFFERENT suffixes:
+//
+//	protobuf C++   foo.proto  ->  foo.pb.h
+//	streaming_proto foo.proto ->  foo.proto.h
+func generatedHeaderProducer(rel string) string {
+	switch {
+	case strings.HasSuffix(rel, ".pb.h"):
+		return strings.TrimSuffix(rel, ".pb.h") + ".proto"
+	case strings.HasSuffix(rel, ".proto.h"):
+		return strings.TrimSuffix(rel, ".h")
+	}
+	return rel
+}
+
+// stockRelocSpecs is the full set. Each entry earned its place from a real build failure.
+var stockRelocSpecs = []stockRelocSpec{
+	{
+		// `import "frameworks/base/core/proto/x.proto";` inside a lane .proto. protoc resolves the
+		// import against STOCK and bakes a stock-shaped #include into the generated .pb.h, which the
+		// lane-rooted -I cannot satisfy. NOTE BOTH ROOTS: an earlier revision matched only
+		// `frameworks/` and silently left 17 `packages/` imports across 13 files — a tree with two
+		// lane roots reporting hits from only one is an incomplete scan, not a clean one.
+		name:     "proto import",
+		exts:     []string{".proto"},
+		re:       regexp.MustCompile(`(?m)(\s*import\s+")(frameworks|packages)/([^"]+)(";)`),
+		producer: identityProducer,
+	},
+	{
+		// `#include "frameworks/base/core/proto/x.pb.h"` in hand-written C/C++. The header is
+		// GENERATED, so it is never on disk — test the .proto that produces it.
+		name:     "generated-header include",
+		exts:     []string{".cpp", ".cc", ".cxx", ".c", ".h", ".hpp"},
+		re:       regexp.MustCompile(`(#include\s+[<"])(frameworks|packages)/([^">]+)([">])`),
+		producer: generatedHeaderProducer,
+	},
+}
+
+// runRelocateStockSourcePaths applies every spec across the lane trees. Used by `create` WITHOUT
+// -from, and by `requalify -sources` without -from. Blueprint files are NOT touched here — they go
+// through requalify (labels) and `requalify -paths` (bare + embedded paths), which are AST-safe.
+func runRelocateStockSourcePaths(c LaneConfig, outRoot string) (changed, moved, kept int) {
+	laneRoot := map[string]string{"frameworks": "frameworks-" + c.Name, "packages": "packages-" + c.Name}
+	exists := map[string]bool{}
+	has := func(rel string) bool {
+		if v, ok := exists[rel]; ok {
+			return v
+		}
+		_, err := os.Stat(filepath.Join(outRoot, rel))
+		exists[rel] = err == nil
+		return err == nil
+	}
+	fmt.Printf("\nrelocate STOCK paths in NON-bp sources (existence-guarded, producer-aware):\n")
+	for _, spec := range stockRelocSpecs {
+		want := map[string]bool{}
+		for _, e := range spec.exts {
+			want[e] = true
+		}
+		specMoved, specFiles := 0, 0
+		for _, root := range []string{"frameworks-" + c.Name, "packages-" + c.Name} {
+			rootDir := filepath.Join(outRoot, root)
+			if fi, err := os.Stat(rootDir); err != nil || !fi.IsDir() {
+				continue
+			}
+			filepath.Walk(rootDir, func(p string, fi os.FileInfo, e error) error {
+				if e != nil || fi.IsDir() || fi.Size() > 8<<20 || !want[strings.ToLower(filepath.Ext(p))] {
+					return nil
+				}
+				b, rerr := os.ReadFile(p)
+				if rerr != nil {
+					return nil
+				}
+				n := 0
+				out := spec.re.ReplaceAllFunc(b, func(m []byte) []byte {
+					g := spec.re.FindSubmatch(m)
+					lane := laneRoot[string(g[2])] + "/" + string(g[3])
+					if !has(laneRoot[string(g[2])] + "/" + spec.producer(string(g[3]))) {
+						kept++
+						return m // no lane parallel — this reference MUST stay stock
+					}
+					n++
+					return []byte(string(g[1]) + lane + string(g[4]))
+				})
+				if n > 0 && os.WriteFile(p, out, fi.Mode().Perm()) == nil {
+					specMoved += n
+					specFiles++
+					changed++
+				}
+				return nil
+			})
+		}
+		moved += specMoved
+		fmt.Printf("  %-26s %4d reference(s) in %d file(s)\n", spec.name, specMoved, specFiles)
+	}
+	fmt.Printf("  %d left stock (no lane parallel — correct, NOT a miss).\n", kept)
+	return changed, moved, kept
 }

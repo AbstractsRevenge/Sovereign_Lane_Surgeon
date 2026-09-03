@@ -17,12 +17,28 @@ limitations under the License.
 
 # Sovereign Lane Surgeon
 
-A self-contained Go toolkit that takes a **Google Pixel factory image** and produces a **working
-AOSP build for that physical device**, on a release the device was never shipped on.
+A self-contained Go toolkit that takes a **Google Pixel factory image** and produces a **buildable
+AOSP source tree** for that phone, then an image that boots on it.
 
-It was built to answer one question: android-17 dropped the device trees for every Pixel that
-predates it, so can those devices be revived faithfully, from data rather than from guesswork?
-On 2026-09-03 a Pixel 7 Pro booted an android-17 image the toolkit seeded, built and flashed.
+## The gap it closes
+
+These phones run android-17. Google supports them on it and publishes CP2A factory images for all
+twenty devices the release names, at
+[developers.google.com/android/images](https://developers.google.com/android/images). That is
+where this toolkit gets its own inputs.
+
+What android-17's **AOSP source** does not include is their **device trees**. Its manifest ships
+no Pixel phone tree at all, only `atv`, `contexthub`, `cuttlefish`, `sdv` and `trout`. Sixteen of
+the twenty cp2a devices had trees as recently as android-15; four (blazer, frankel, mustang,
+rango) have never had one in any tag.
+
+So you can flash Google's android-17 build onto a Pixel 7 Pro today, and you cannot build
+android-17 **from AOSP source** for that same phone. Closing that gap is what this is for: revive
+the device tree from the last release that published it, reconcile it against the target release
+by probing the target rather than by carrying a patch list, and take the vendor blobs and the
+kernel from the factory image.
+
+On 2026-09-03 a Pixel 7 Pro booted an android-17 image seeded, built and flashed this way.
 
 ## What is actually proven
 

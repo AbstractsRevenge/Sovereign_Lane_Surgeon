@@ -26,8 +26,14 @@ limitations under the License.
 
 ## cp2a device coverage (android-17.0.0_r1, updated 2026-09-03 11:00 UTC)
 
-The cp2a release names 20 devices; 16 have an AOSP tree (Pixel 10 family: blazer, frankel, mustang,
-rango, stallion have CP2A factory images but no tree in any tag — out of reach). **Milestone 2026-09-02 13:11 UTC: all 16 devices `m nothing` green on android-17.0.0_r1 from `create -stock` alone.** **Milestone 2026-09-03 11:26 UTC: tegu closes the set — 9 full images across every SoC generation cp2a ships (gs201, gs101, zuma, zumapro), every one `preflight` FLASHABLE, from one bundle and one code path.** Komodo cleared secilc on the first attempt because the caimito neverallow rows went in before it reached them, from a scan prompted by husky's failure. The analysis gate is green for all 16 and is *blind* to what the last two failures were: a full build is what finds a dropped symlink or a neverallow violation, which is why one device per SoC family is built rather than none or all. **Milestone 2026-09-03 01:12 UTC: cheetah BOOTS the Surgeon-built android-17 image (lock screen, adb, enforcing, encrypted) — first Pixel running android-17 from this toolkit.** **Milestone 15:25 UTC: cheetah `m droid superimage` completed (run 152554Z) — the first full android-17 image for a Pixel from the Surgeon's own tree.** Status per device:
+The cp2a release names 20 devices (its `RELEASE_KERNEL_<DEVICE>_DIR` flags are the authoritative
+list: akita blazer bluejay caiman cheetah comet felix frankel husky komodo lynx mustang oriole
+panther rango raven shiba tangorpro tegu tokay). 16 have an AOSP tree in some tag; the other four —
+blazer, frankel, mustang, rango — have CP2A factory images but no tree in any tag, so they are out
+of reach. **None of the 16 has a tree in android-17 itself**: that manifest ships no Pixel phone
+device tree at all, only atv, contexthub, cuttlefish, sdv and trout. The devices run android-17 —
+Google publishes their factory images — but AOSP does not carry the source to build it for them,
+which is the gap `create -stock` closes. **Milestone 2026-09-02 13:11 UTC: all 16 devices `m nothing` green on android-17.0.0_r1 from `create -stock` alone.** **Milestone 2026-09-03 11:26 UTC: tegu closes the set — 9 full images across every SoC generation cp2a ships (gs201, gs101, zuma, zumapro), every one `preflight` FLASHABLE, from one bundle and one code path.** Komodo cleared secilc on the first attempt because the caimito neverallow rows went in before it reached them, from a scan prompted by husky's failure. The analysis gate is green for all 16 and is *blind* to what the last two failures were: a full build is what finds a dropped symlink or a neverallow violation, which is why one device per SoC family is built rather than none or all. **Milestone 2026-09-03 01:12 UTC: cheetah BOOTS the Surgeon-built android-17 image (lock screen, adb, enforcing, encrypted) — first Pixel running android-17 from this toolkit.** **Milestone 15:25 UTC: cheetah `m droid superimage` completed (run 152554Z) — the first full android-17 image for a Pixel from the Surgeon's own tree.** Status per device:
 
 | device | family / SoC | tree source | factory image | `create -stock` | `m nothing` | full build | flashed |
 |---|---|---|---|---|---|---|---|

@@ -23,7 +23,11 @@ Every device family the cp2a release names that has an AOSP tree: raviole, bluej
 tangorpro, felix, shusky, akita, caimito, comet and tegu, with their SoC directories gs101, gs201,
 zuma and zumapro. That is 16 devices, from Pixel 6 to Pixel 9a.
 
-Four devices in cp2a have no AOSP tree in any tag and are out of reach.
+The other four cp2a devices — blazer, frankel, mustang and rango — have CP2A factory images like
+the rest, but no AOSP device tree in any tag, so there is nothing to revive them from.
+
+None of the sixteen has a tree in android-17 itself: that release's manifest ships no Pixel phone
+device tree at all. Every tree here comes from the last release that published it.
 
 Provenance is recorded per directory: everything comes from android-15.0.0_r36 except tegu, whose
 tree exists only under r31. Cross-tag differences are reconciled from a manifest rather than by

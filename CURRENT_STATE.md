@@ -1,8 +1,8 @@
 # Sovereign Lane Surgeon - Current State
 
-**Last Updated:** 2026-09-03 11:50 UTC  
+**Last Updated:** 2026-09-03 13:00 UTC  
 **Version:** v0.4.0  
-**Status:** Physical Device Revival Phase — all 16 cp2a devices `m nothing` green; full images on **every SoC generation cp2a ships** (gs101, gs201, zuma, zumapro), all 8 `preflight` FLASHABLE; **cheetah boots the Surgeon-built android-17 image** (first 2026-09-03 01:12 UTC on `assemble-super`'s packed super, re-proven 07:11 UTC on the build's **own** complete super). tegu (the r31 tree) building; the remaining seven siblings deferred by decision (no test devices).  
+**Status:** **Port complete for every SoC generation cp2a ships.** All 16 devices `m nothing` green from `create -stock` alone; 9 full images (gs201 ×5, gs101, zuma, zumapro ×2 incl. the r31 tegu tree), every one `preflight` FLASHABLE; **cheetah boots the Surgeon-built android-17 image** — first 2026-09-03 01:12 UTC, re-proven 07:11 UTC on the build's **own** complete super. Seven siblings deferred by decision (no test devices). Next horizon: Holo transformations.  
 
 ---
 
@@ -10,7 +10,7 @@
 ## cp2a device coverage (android-17.0.0_r1, updated 2026-09-03 11:00 UTC)
 
 The cp2a release names 20 devices; 16 have an AOSP tree (Pixel 10 family: blazer, frankel, mustang,
-rango, stallion have CP2A factory images but no tree in any tag — out of reach). **Milestone 2026-09-02 13:11 UTC: all 16 devices `m nothing` green on android-17.0.0_r1 from `create -stock` alone.** **Milestone 2026-09-03 10:36 UTC: komodo is the first zumapro full image — full images now span every SoC generation cp2a ships (gs101, gs201, zuma, zumapro), every one `preflight` FLASHABLE.** Komodo cleared secilc on the first attempt because the caimito neverallow rows went in before it reached them, from a scan prompted by husky's failure. The analysis gate is green for all 16 and is *blind* to what the last two failures were: a full build is what finds a dropped symlink or a neverallow violation, which is why one device per SoC family is built rather than none or all. **Milestone 2026-09-03 01:12 UTC: cheetah BOOTS the Surgeon-built android-17 image (lock screen, adb, enforcing, encrypted) — first Pixel running android-17 from this toolkit.** **Milestone 15:25 UTC: cheetah `m droid superimage` completed (run 152554Z) — the first full android-17 image for a Pixel from the Surgeon's own tree.** Status per device:
+rango, stallion have CP2A factory images but no tree in any tag — out of reach). **Milestone 2026-09-02 13:11 UTC: all 16 devices `m nothing` green on android-17.0.0_r1 from `create -stock` alone.** **Milestone 2026-09-03 11:26 UTC: tegu closes the set — 9 full images across every SoC generation cp2a ships (gs201, gs101, zuma, zumapro), every one `preflight` FLASHABLE, from one bundle and one code path.** Komodo cleared secilc on the first attempt because the caimito neverallow rows went in before it reached them, from a scan prompted by husky's failure. The analysis gate is green for all 16 and is *blind* to what the last two failures were: a full build is what finds a dropped symlink or a neverallow violation, which is why one device per SoC family is built rather than none or all. **Milestone 2026-09-03 01:12 UTC: cheetah BOOTS the Surgeon-built android-17 image (lock screen, adb, enforcing, encrypted) — first Pixel running android-17 from this toolkit.** **Milestone 15:25 UTC: cheetah `m droid superimage` completed (run 152554Z) — the first full android-17 image for a Pixel from the Surgeon's own tree.** Status per device:
 
 | device | family / SoC | tree source | factory image | `create -stock` | `m nothing` | full build | flashed |
 |---|---|---|---|---|---|---|---|
@@ -29,7 +29,7 @@ rango, stallion have CP2A factory images but no tree in any tag — out of reach
 | caiman | caimito / zumapro | r36 | CP2A.260805.005.A1 | ✅ | ✅ 124121Z | ⏳ | — |
 | komodo | caimito / zumapro | r36 | CP2A.260805.005.A1 | ✅ | ✅ 125721Z | ✅ 103613Z full_completed | preflight FLASHABLE — **first zumapro full image**; cleared secilc first time on the caimito neverallow rows added before it got there |
 | comet | comet / zumapro | r36 | CP2A.260805.005.A1 | ✅ | ✅ 130022Z | ⏳ | — |
-| tegu | tegu / zumapro | **r31** (Pixel 9a's own branch) | CP2A.260805.005 | ✅ (its include-only root Android.mk is denylisted by 17 and removed) | ✅ 060530Z (re-gated) | ⏳ running (-j20, the only r31 tree) | — |
+| tegu | tegu / zumapro | **r31** (Pixel 9a's own branch) | CP2A.260805.005 | ✅ (its include-only root Android.mk is denylisted by 17 and removed) | ✅ 060530Z (re-gated) | ✅ 112641Z full_completed | preflight FLASHABLE — the only r31 tree, built like the rest |
 
 What the wider families taught the toolkit (all in `create -stock` now): gs101 has no
 vendor_kernel_boot.img — first-stage modules and the dtb come from vendor_boot.img's `dlkm` ramdisk
@@ -57,7 +57,7 @@ The Sovereign Lane Surgeon is a self-contained Go toolkit for creating parallel 
 | AST operations | ✅ Working | Blueprint/Go AST patching (no regex): rename, drop-dep, requalify, cflag drop, AIDL re-pin, defaults pinning, header_libs add |
 | Uninstall/rollback | ✅ Working | Byte-identical reversal |
 | Audit/classification | ✅ Working | 23-class taxonomy incl. the android-17 classes (illegal cflag, AIDL version conflict, system-props artifact path, neverallow violation, stale generated mk, kernel module rule collision) |
-| Test suite | ✅ Working | 112 tests, all passing (`go test ./...`) |
+| Test suite | ✅ Working | 135 tests, all passing (`go test ./...`); `docs_test.go` fails the suite when README/CURRENT_STATE drift from the code |
 
 ### Device Revival (`create -stock`)
 | Component | Status | Details |
@@ -145,9 +145,8 @@ cp2a on android-17.0.0_r1 — from factory image to a booting phone
 ├── [✅] Vendor glue where the device tree includes it → complete super from the build itself
 ├── [✅] m nothing green: all 16 devices
 ├── [✅] m droid superimage: cheetah, panther, lynx, tangorpro, felix (gs201) · oriole (gs101) · husky (zuma)
-├── [✅] m droid superimage: komodo (zumapro) 103613Z — every cp2a SoC generation now has one
-├── [⏳] m droid superimage: tegu (the only r31 tree) running
-├── [✅] preflight FLASHABLE on every completed image (8/8)
+├── [✅] m droid superimage: komodo (zumapro) 103613Z, tegu 112641Z (the only r31 tree)
+├── [✅] preflight FLASHABLE on every completed image (9/9)
 ├── [✅] Physical boot: cheetah ×2 — 2nd on the build's own super, 48 s to lock screen
 └── [✅] Tour + runtime capture (camera fault traced to this unit's hardware, not the port)
 
@@ -225,7 +224,7 @@ zumapro device silently unbuildable, with a green analysis gate.
 1. [x] Run `m droid superimage` successfully — cheetah 152554Z, panther 153638Z, lynx 171442Z, tangorpro 223034Z (six new compat ops + kernel headers came out of cheetah's ten attempts)
 2. [x] Boot on a physical device — cheetah, 2026-09-03 01:12 UTC (`assemble-super` + `flash_cheetah.sh`; firmware, vbmeta-as-signed and explicit f2fs format were the three flash lessons)
 3. [x] Port Cheetah, Lynx, Tangorpro — and the other twelve cp2a devices at the `m nothing` gate
-5. [ ] Full builds on the fixed glue, one at a time: **gs201 complete** (cheetah 062805Z, panther 071321Z, lynx 071754Z, tangorpro 072229Z, felix 075845Z), **gs101 proven** (oriole 072701Z), **zuma proven** (husky 102510Z, third attempt), **zumapro proven** (komodo 103613Z, first attempt). Running: tegu, the only device on the r31 tree. Every completed image is `preflight` FLASHABLE. The other seven siblings stay deferred (no test devices; identical trees, already-green gates).
+5. [x] **Full builds complete, one at a time:** gs201 (cheetah 062805Z, panther 071321Z, lynx 071754Z, tangorpro 072229Z, felix 075845Z), gs101 (oriole 072701Z), zuma (husky 102510Z, third attempt — two toolkit bugs), zumapro (komodo 103613Z first attempt, tegu 112641Z on the r31 tree). All 9 `preflight` FLASHABLE. Deferred (no test devices; identical trees, green gates): raven, bluejay, shiba, akita, tokay, caiman, comet.
 5. [x] Cheetah camera — CLOSED as a fault of this unit, not the port (2026-09-03 02:18Z). Control test on stock (factory system, vendor and boot chain, matching firmware, captured with the same tool into `…/20260903T021809Z_boot_ok_stock-camera-black/`): 0 camera devices, 414 provider crashes, all 32 tombstones carry the identical abort `KRAKEN init error … LwisFence signal status: No such device or address`, rear and front cameras black. Our image's chain of evidence (kernel `lwis-sensor-kraken: I2C Write failed (-6)` → HAL abort loop → camera service add/remove → 0 devices → Camera2 app AIOOBE) is the same fault seen from an eng build. Boot images, module loading and bootconfig were each excluded on the way (factory boot chain over our super fails identically).
 
 ### Medium-term (This Month)

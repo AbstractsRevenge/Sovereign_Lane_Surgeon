@@ -349,8 +349,11 @@ PATH=/path/to/android-17.0.0_r1/out-aosp17/cheetah/eng/host/linux-x86/bin:$PATH 
   ./bin/aosp_runtime_log_capture -device <serial> -lane aosp17_cheetah -label first-boot -pull-tombstones
 ```
 
-Measured on cheetah: adb at 40 s, `sys.boot_completed` at 70 s, SELinux enforcing, /data encrypted, orange
-verified-boot state, wifi scanning, 35 hardware services registered. Steps 1–5 and 7 are the toolkit's;
+Measured on cheetah (2026-09-03, second proof, on the build's own complete super): adb at 21 s, `sys.boot_completed`
+at 48 s, SELinux enforcing, /data encrypted, orange verified-boot state, vendor and vendor_dlkm mounted through
+dm-verity under the build's vbmeta_vendor chain, baseband reported, 75 hardware services registered, and the
+IMS/RCS/UWB vendor apps installed on system_ext from the wired blobs (first proof, 2026-09-03 01:12 UTC: adb 40 s,
+boot 70 s, on `assemble-super`'s packed super). Steps 1–5 and 7 are the toolkit's;
 step 6 is deliberate operator work (firmware and a wipe).
 
 ## Distribution, growth and drift (2026-09-03)

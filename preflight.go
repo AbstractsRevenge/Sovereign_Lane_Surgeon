@@ -305,9 +305,15 @@ func preflightChecks(outRoot, device, productOut, hostBin, factoryDir string) []
 			missing = append(missing, p)
 		}
 	}
+	// super_full.img is assemble-super's fallback for a pre-fix tree; once the build's own
+	// super.img is newer, that is the image the flash script uses and the one measured here.
 	superImg := img(productOut, "super")
-	if fileExists(filepath.Join(productOut, "super_full.img")) {
-		superImg = filepath.Join(productOut, "super_full.img")
+	if full := filepath.Join(productOut, "super_full.img"); fileExists(full) {
+		fi, ferr := os.Stat(full)
+		si, serr := os.Stat(superImg)
+		if ferr == nil && (serr != nil || fi.ModTime().After(si.ModTime())) {
+			superImg = full
+		}
 	}
 	if !fileExists(superImg) {
 		missing = append(missing, "super")

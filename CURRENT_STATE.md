@@ -179,6 +179,9 @@ Complete: 6/8 tasks (75%)
 ### Build Status
 ```bash
 # `m nothing` (analysis gate), all 16 cp2a devices, android-17.0.0_r1, 2026-09-02: completed_bootstrap
+# Re-gated 2026-09-03 on the loaded vendor board config (glue under proprietary/, system_ext blobs, LICENSE/COPYRIGHT), one build at a time: completed_bootstrap
+#   cheetah 032523Z  lynx 052033Z  panther 052436Z  tangorpro 052825Z  oriole 053213Z  raven 053604Z  bluejay 053947Z  felix 054324Z
+#   shiba 054709Z  husky 054952Z  akita 055230Z  tokay 055506Z  caiman 055742Z  komodo 060016Z  comet 060252Z  tegu 060530Z
 #   panther 120519Z  cheetah 120945Z  lynx 121328Z  tangorpro 121701Z  felix 122559Z
 #   raven 123025Z    bluejay 123425Z  tokay 123822Z  caiman 124121Z    oriole 124446Z
 #   shiba 124842Z    husky 125137Z    akita 125430Z  komodo 125721Z    comet 130022Z  tegu 131105Z
@@ -209,7 +212,8 @@ Complete: 6/8 tasks (75%)
 ### Medium-term (This Month)
 1. [x] System_ext.img extraction (2026-09-03)
 2. [ ] **One AOSP build at a time on this laptop** (T, 2026-09-03 ~04:00 UTC): two -j16 full builds plus paired gates exhausted memory and crashed VS Code — felix/oriole lost at ~70%, five gate runs killed (their `failed` dirs 034200Z–034324Z are interleaved-log/lock artifacts, not build errors). Gates now run strictly sequentially (detached runner); full builds one at a time.
-3. [x] Vendor glue root cause fixed; cheetah `m nothing` green on the loaded vendor board config: run 20260903T032523Z (0 errors); the other 15 gates re-run next, then cheetah rebuilt, `preflight`, reflash
+3. [x] Vendor glue root cause fixed; all 16 `m nothing` green on the loaded vendor board config (run ids in the coverage block; lynx's first re-gate 051644Z exposed the lib/lib64 placement bug, fixed in dc1eb23)
+4. [ ] cheetah full rebuild on the fixed glue (started 06:27 UTC, alone), then `preflight`, reflash, tour
 2. [ ] Flash and tour a second family (gs101 or zuma) once its full build lands — the flash script is per device
 3. [x] Merge v0.4.0 lane work onto main (683d196)
 4. [x] Documentation for the android-17 port: README (operations 1–10, bundle, kernel, flashing), this file, the port changelog

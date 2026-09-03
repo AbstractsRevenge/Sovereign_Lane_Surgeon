@@ -208,7 +208,8 @@ Complete: 6/8 tasks (75%)
 
 ### Medium-term (This Month)
 1. [x] System_ext.img extraction (2026-09-03)
-2. [x] Vendor glue root cause fixed; cheetah `m nothing` green on the loaded vendor board config: run 20260903T032523Z (0 errors); the other 15 gates re-run next, then cheetah rebuilt, `preflight`, reflash
+2. [ ] **One AOSP build at a time on this laptop** (T, 2026-09-03 ~04:00 UTC): two -j16 full builds plus paired gates exhausted memory and crashed VS Code — felix/oriole lost at ~70%, five gate runs killed (their `failed` dirs 034200Z–034324Z are interleaved-log/lock artifacts, not build errors). Gates now run strictly sequentially (detached runner); full builds one at a time.
+3. [x] Vendor glue root cause fixed; cheetah `m nothing` green on the loaded vendor board config: run 20260903T032523Z (0 errors); the other 15 gates re-run next, then cheetah rebuilt, `preflight`, reflash
 2. [ ] Flash and tour a second family (gs101 or zuma) once its full build lands — the flash script is per device
 3. [x] Merge v0.4.0 lane work onto main (683d196)
 4. [x] Documentation for the android-17 port: README (operations 1–10, bundle, kernel, flashing), this file, the port changelog

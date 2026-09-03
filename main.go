@@ -30,6 +30,8 @@
 //
 // Subcommands:
 //
+//	create -stock …             revive a device family from the embedded bundle + factory image, target-compat pass
+//	assemble-super              after a full build: pack prebuilt vendor into super_full.img + flash_<device>.sh
 //	audit  -report <dir|json>   classify a build-capture run's failures by the §22 taxonomy
 //	verify -report <dir|json>   print the authoritative run-dir verdict (dir_status), never exit code
 //	create                      lane scaffolder (§23.1): products + route manifest, stages soong patches

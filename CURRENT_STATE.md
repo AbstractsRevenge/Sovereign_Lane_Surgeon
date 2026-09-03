@@ -1,8 +1,8 @@
 # Sovereign Lane Surgeon - Current State
 
-**Last Updated:** 2026-09-02  
-**Version:** v0.4.0 (in development; `main.go` still prints 0.3.0)  
-**Status:** Active Development - Physical Device Revival Phase - Panther `m nothing` GREEN
+**Last Updated:** 2026-09-03  
+**Version:** v0.4.0  
+**Status:** Physical Device Revival Phase — all 16 cp2a devices `m nothing` green; gs201 family full images built; **cheetah boots the Surgeon-built android-17 image** (2026-09-03 01:12 UTC); remaining full builds running two at a time
 
 ---
 
@@ -18,8 +18,8 @@ rango, stallion have CP2A factory images but no tree in any tag — out of reach
 | cheetah | pantah / gs201 | r36 | CP2A.260705.006 | ✅ | ✅ 120945Z | ✅ 152554Z full_completed (super.img); 10 attempts, each a new compat op or bundle asset: 5 libion header, 6 statsd proto, 7 sepolicy types, kernel-headers, 8 neverallows, 9 -Wno-error, 10 power HAL V6 | ✅ 01:11Z flashed with flash_cheetah.sh sequence, booted in 70 s: our eng build over the CP2A vendor blob, SELinux enforcing, /data encrypted, display/battery/wifi/adb up, orange state. Defect: main camera sensor (KRAKEN) I2C writes fail ENXIO at the hardware level → Google camera HAL restarts every 5 s (other sensor inits fine) |
 | lynx | lynx / gs201 | r36 | CP2A.260705.006 | ✅ | ✅ 121328Z | ✅ 171442Z full_completed | — |
 | tangorpro | tangorpro / gs201 | r36 | CP2A.260705.006 | ✅ | ✅ 121701Z | ✅ 223034Z full_completed (from-scratch after the crash left corrupt intermediates) | — |
-| felix | felix / gs201 | r36 | CP2A.260705.006 | ✅ | ✅ 122559Z | ⏳ | — |
-| oriole | raviole / gs101 | r36 | CP2A.260705.006.A1 | ✅ (kernel from vendor_boot.img) | ✅ 124446Z | ⏳ | — |
+| felix | felix / gs201 | r36 | CP2A.260705.006 | ✅ | ✅ 122559Z | ⏳ running (-j16, started 01:16Z 2026-09-03) | — |
+| oriole | raviole / gs101 | r36 | CP2A.260705.006.A1 | ✅ (kernel from vendor_boot.img) | ✅ 124446Z | ⏳ running (-j16, started 01:16Z 2026-09-03) | — |
 | raven | raviole / gs101 | r36 | CP2A.260705.006.A1 | ✅ | ✅ 123025Z | ⏳ | — |
 | bluejay | bluejay / gs101 | r36 | CP2A.260705.006.A1 | ✅ | ✅ 123425Z | ⏳ | — |
 | shiba | shusky / zuma | r36 | CP2A.260805.005 | ✅ | ✅ 124842Z | ⏳ | — |
@@ -194,11 +194,12 @@ Complete: 6/8 tasks (75%)
 
 ### Build Status
 ```bash
-# 2026-09-02, aosp17_panther_nothing via Build Capture:
-run_dir: 20260902T092636Z_panther_completed_bootstrap_nothing
-status:  success=true exit_code=0 duration=217.8s
-events:  soong_errors=0 kati_errors=0 ninja_failures=0
-[100% 45/45] nothing
+# `m nothing` (analysis gate), all 16 cp2a devices, android-17.0.0_r1, 2026-09-02: completed_bootstrap
+#   panther 120519Z  cheetah 120945Z  lynx 121328Z  tangorpro 121701Z  felix 122559Z
+#   raven 123025Z    bluejay 123425Z  tokay 123822Z  caiman 124121Z    oriole 124446Z
+#   shiba 124842Z    husky 125137Z    akita 125430Z  komodo 125721Z    comet 130022Z  tegu 131105Z
+# `m -j32 droid superimage` (full image): cheetah 152554Z, panther 153638Z, lynx 171442Z, tangorpro 223034Z
+# boot: cheetah 2026-09-03 01:12Z — adb at 40 s, boot_completed at 70 s, Enforcing, encrypted, orange
 ```
 
 ---
@@ -215,16 +216,17 @@ events:  soong_errors=0 kati_errors=0 ninja_failures=0
 5. [x] Kernel prebuilts: `assemble-kernel` builds `pantah-kernels/6.1/26Q2-15260412` (and lynx/tangorpro) from the factory images; `gs201/BoardConfig-common.mk` restored to pristine; `TARGET_LINUX_KERNEL_VERSION` set to 6.1 (the kernel the image actually carries)
 
 ### Short-term (This Week)
-1. [ ] Fix any remaining build errors
-2. [ ] Run `m droid` successfully
-3. [ ] Test boot on physical Panther device
-4. [ ] Port Cheetah, Lynx, Tangorpro
+1. [x] Run `m droid superimage` successfully — cheetah 152554Z, panther 153638Z, lynx 171442Z, tangorpro 223034Z (six new compat ops + kernel headers came out of cheetah's ten attempts)
+2. [x] Boot on a physical device — cheetah, 2026-09-03 01:12 UTC (`assemble-super` + `flash_cheetah.sh`; firmware, vbmeta-as-signed and explicit f2fs format were the three flash lessons)
+3. [x] Port Cheetah, Lynx, Tangorpro — and the other twelve cp2a devices at the `m nothing` gate
+4. [ ] Full builds for the remaining twelve (felix and oriole running; then bluejay, raven, shiba, husky, akita, tokay, caiman, komodo, comet, tegu, two at a time at -j16)
+5. [ ] Cheetah camera: main sensor (KRAKEN) fails I2C at the hardware level under the factory driver/DT — confirm on stock whether the unit's rear camera works before treating it as a port issue
 
 ### Medium-term (This Month)
-1. [ ] System_ext.img extraction enhancement
-2. [ ] Full validation on all 4 devices
-3. [ ] Merge v0.4.0 enhancements
-4. [ ] Update documentation for Android 16/17 porting
+1. [ ] System_ext.img extraction (the 5–7 blobs per device the self-extractor lists inside system_ext.img — ShannonIms/Rcs, libmediaadaptor, UwbVendorService)
+2. [ ] Flash and tour a second family (gs101 or zuma) once its full build lands — the flash script is per device
+3. [x] Merge v0.4.0 lane work onto main (683d196)
+4. [x] Documentation for the android-17 port: README (operations 1–10, bundle, kernel, flashing), this file, the port changelog
 
 ---
 

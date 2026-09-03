@@ -49,7 +49,12 @@ import (
 // proprietary trees AOSP never ships are reported. Then the target-release compatibility pass
 // (targetcompat.go) rewrites, in the mirrored subtrees only, the idioms the target tree is probed
 // to reject. Measured result: `create -stock -release cp2a` + `m nothing` green on
-// android-17.0.0_r1 for panther/cheetah/lynx/tangorpro with no hand edit (2026-09-02).
+// android-17.0.0_r1 for all 16 cp2a devices with an AOSP tree, full images for the gs201
+// family, and cheetah booting the image (2026-09-02/03) with no hand edit.
+//
+// After a full build the image is not yet flashable as the tree leaves it: android-17's Soong
+// super omits the prebuilt vendor partitions. `assemble-super` (flashkit.go) packs them and writes
+// the flash procedure; the vendor wiring (vendorblobs.go) carries the firmware the blobs require.
 
 // stockArgs bundles cmdCreate's -stock-mode flags (kept separate from the interactive/-name lane
 // flow in cmdCreate for readability).

@@ -65,13 +65,29 @@ jobs:
           ./sovereign-lane-surgeon bundle verify
 
       - name: Tests
-        # Includes an end-to-end seed of a real device family from the embedded bundle into a
-        # temporary tree, plus the licence and documentation consistency tests.
-        run: go test -v ./... 2>&1 | tail -80
+        # `set -o pipefail` matters: GitHub runs each step with `bash -e`, not `-o pipefail`, so a
+        # pipeline's exit status would be tail's and a failing suite would report success. Run once
+        # and tee, rather than re-running the suite for a summary — it contains an end-to-end seed
+        # that copies hundreds of megabytes.
+        run: |
+          set -o pipefail
+          go test -v ./... 2>&1 | tee test-output.txt | grep -E '^(=== RUN|--- FAIL|ok|FAIL|panic)' | tail -40
 
       - name: Test summary
         if: always()
         run: |
-          total=$(go test -v ./ 2>&1 | grep -c '^=== RUN' || true)
-          echo "### $total tests" >> "$GITHUB_STEP_SUMMARY"
-          go test ./... 2>&1 | sed 's/^/    /' >> "$GITHUB_STEP_SUMMARY"
+          if [ ! -f test-output.txt ]; then echo "no test output" >> "$GITHUB_STEP_SUMMARY"; exit 0; fi
+          run_count=$(grep -c '^=== RUN' test-output.txt || true)
+          fail_count=$(grep -c '^--- FAIL' test-output.txt || true)
+          echo "### ${run_count} tests, ${fail_count} failed" >> "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+          grep -E '^(--- FAIL|ok |FAIL)' test-output.txt | head -40 >> "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload test output
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-output
+          path: test-output.txt
+          if-no-files-found: ignore

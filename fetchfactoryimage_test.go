@@ -64,9 +64,9 @@ func TestExtractZipAndFindInner(t *testing.T) {
 		t.Fatal(err)
 	}
 	writeTestZip(t, outerZip, map[string]string{
-		"testdevice-build1/bootloader-testdevice-hash.img":  "fake bootloader",
-		"testdevice-build1/image-testdevice-build1.zip":     string(innerBytes),
-		"testdevice-build1/flash-all.sh":                    "#!/bin/bash\necho flash",
+		"testdevice-build1/bootloader-testdevice-hash.img": "fake bootloader",
+		"testdevice-build1/image-testdevice-build1.zip":    string(innerBytes),
+		"testdevice-build1/flash-all.sh":                   "#!/bin/bash\necho flash",
 	})
 
 	destDir := filepath.Join(dir, "out")

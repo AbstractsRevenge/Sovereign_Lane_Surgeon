@@ -18,8 +18,8 @@ rango, stallion have CP2A factory images but no tree in any tag — out of reach
 | cheetah | pantah / gs201 | r36 | CP2A.260705.006 | ✅ | ✅ 120945Z | ✅ 152554Z full_completed (super.img); 10 attempts, each a new compat op or bundle asset: 5 libion header, 6 statsd proto, 7 sepolicy types, kernel-headers, 8 neverallows, 9 -Wno-error, 10 power HAL V6 | ✅ 01:11Z flashed with flash_cheetah.sh sequence, booted in 70 s: our eng build over the CP2A vendor blob, SELinux enforcing, /data encrypted, display/battery/wifi/adb up, orange state. Defect: main camera sensor (KRAKEN) I2C writes fail ENXIO at the hardware level → Google camera HAL restarts every 5 s (other sensor inits fine) |
 | lynx | lynx / gs201 | r36 | CP2A.260705.006 | ✅ | ✅ 121328Z | ✅ 171442Z full_completed | — |
 | tangorpro | tangorpro / gs201 | r36 | CP2A.260705.006 | ✅ | ✅ 121701Z | ✅ 223034Z full_completed (from-scratch after the crash left corrupt intermediates) | — |
-| felix | felix / gs201 | r36 | CP2A.260705.006 | ✅ | ✅ 122559Z | ⏳ running (-j16, started 01:16Z 2026-09-03) | — |
-| oriole | raviole / gs101 | r36 | CP2A.260705.006.A1 | ✅ (kernel from vendor_boot.img) | ✅ 124446Z | ⏳ running (-j16, started 01:16Z 2026-09-03) | — |
+| felix | felix / gs201 | r36 | CP2A.260705.006 | ✅ | ✅ 054324Z (re-gated) | ⏳ queued (-j20, after oriole) | — |
+| oriole | raviole / gs101 | r36 | CP2A.260705.006.A1 | ✅ (kernel from vendor_boot.img) | ✅ 053213Z (re-gated) | ⏳ running (-j16, restarted 07:26Z 2026-09-03) | — |
 | raven | raviole / gs101 | r36 | CP2A.260705.006.A1 | ✅ | ✅ 123025Z | ⏳ | — |
 | bluejay | bluejay / gs101 | r36 | CP2A.260705.006.A1 | ✅ | ✅ 123425Z | ⏳ | — |
 | shiba | shusky / zuma | r36 | CP2A.260805.005 | ✅ | ✅ 124842Z | ⏳ | — |
@@ -206,12 +206,12 @@ Complete: 6/8 tasks (75%)
 1. [x] Run `m droid superimage` successfully — cheetah 152554Z, panther 153638Z, lynx 171442Z, tangorpro 223034Z (six new compat ops + kernel headers came out of cheetah's ten attempts)
 2. [x] Boot on a physical device — cheetah, 2026-09-03 01:12 UTC (`assemble-super` + `flash_cheetah.sh`; firmware, vbmeta-as-signed and explicit f2fs format were the three flash lessons)
 3. [x] Port Cheetah, Lynx, Tangorpro — and the other twelve cp2a devices at the `m nothing` gate
-4. [ ] Full builds: felix and oriole running (first foldable, first gs101) as the last data points; the other ten (bluejay, raven, shiba, husky, akita, tokay, caiman, komodo, comet, tegu) are **deferred by decision 2026-09-03 02:25Z** — no test device for those families, the `m nothing` gate already covers all sixteen, and the Pixel 7 family is proven end to end (four analysis gates, four full images, cheetah booted and toured). Build them later on demand: `./bin/aosp_build_capture -lane aosp17_<device> -jobs 16`, two at a time, then `assemble-super`.
+5. [ ] Full builds on the fixed glue: gs201 family done (panther 071321Z, lynx 071754Z, tangorpro 072229Z, cheetah 062805Z — all preflight FLASHABLE); oriole (gs101) running, felix queued at -j20; the other ten deferred by decision (no test devices).
 5. [x] Cheetah camera — CLOSED as a fault of this unit, not the port (2026-09-03 02:18Z). Control test on stock (factory system, vendor and boot chain, matching firmware, captured with the same tool into `…/20260903T021809Z_boot_ok_stock-camera-black/`): 0 camera devices, 414 provider crashes, all 32 tombstones carry the identical abort `KRAKEN init error … LwisFence signal status: No such device or address`, rear and front cameras black. Our image's chain of evidence (kernel `lwis-sensor-kraken: I2C Write failed (-6)` → HAL abort loop → camera service add/remove → 0 devices → Camera2 app AIOOBE) is the same fault seen from an eng build. Boot images, module loading and bootconfig were each excluded on the way (factory boot chain over our super fails identically).
 
 ### Medium-term (This Month)
 1. [x] System_ext.img extraction (2026-09-03)
-2. [ ] **One AOSP build at a time on this laptop** (T, 2026-09-03 ~04:00 UTC): two -j16 full builds plus paired gates exhausted memory and crashed VS Code — felix/oriole lost at ~70%, five gate runs killed (their `failed` dirs 034200Z–034324Z are interleaved-log/lock artifacts, not build errors). Gates now run strictly sequentially (detached runner); full builds one at a time.
+2. [x] **One AOSP build at a time on this laptop** (T, 2026-09-03 ~04:00 UTC): two -j16 full builds plus paired gates exhausted memory and crashed VS Code — felix/oriole lost at ~70%, five gate runs killed (their `failed` dirs 034200Z–034324Z are interleaved-log/lock artifacts, not build errors). Gates now run strictly sequentially (detached runner); full builds one at a time.
 3. [x] Vendor glue root cause fixed; all 16 `m nothing` green on the loaded vendor board config (run ids in the coverage block; lynx's first re-gate 051644Z exposed the lib/lib64 placement bug, fixed in dc1eb23)
 4. [x] **cheetah rebuilt on the fixed glue and re-proven (2026-09-03 07:11 UTC)**: Build Capture run 062805Z (8 min, 603 steps — labelled `completed_noop` because siso prints no progress lines off a TTY; Build Capture now parses siso's `Build Succeeded: N steps` line), `preflight` all PASS on the build's own super.img (vendor 802M + vendor_dlkm 55M inside; vbmeta now chains vbmeta_vendor; android-info carries the firmware lines), flashed with the generated script (wipe), adb 21 s, boot_completed 48 s, enforcing, encrypted, vendor/vendor_dlkm mounted through dm-verity, baseband reported, ShannonIms/ShannonRcs/UwbVendorService installed on system_ext from the newly wired blobs. Runtime capture 071219Z_boot_ok_rebuild-complete-super; the only tombstones are the camera provider's known hardware fault.
 2. [ ] Flash and tour a second family (gs101 or zuma) once its full build lands — the flash script is per device
@@ -249,7 +249,7 @@ cd /path/to/aosp-17
 export BUILD_BROKEN_SRC_DIR_IS_WRITABLE=true
 source build/envsetup.sh
 lunch aosp_panther-cp2a-eng
-m nothing -j16
+m nothing -j20
 ```
 
 ### Reporting Issues

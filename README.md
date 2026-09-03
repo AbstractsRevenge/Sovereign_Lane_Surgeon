@@ -144,8 +144,8 @@ The finder's app-naming routing does **per-file stock-parallel replacement with 
 ./sovereign-lane-surgeon apply -out /path/to/aosp
 
 # Build (lunch is aosp_<device>_<lane>-<release>-eng):
-m -j16 nothing        # graph-coherence gate
-m -j16 droid          # full image
+m -j20 nothing        # graph-coherence gate
+m -j20 droid          # full image
 
 # Changed your mind? Reverse the whole seed, byte-for-byte:
 ./sovereign-lane-surgeon uninstall -name myui -out /path/to/aosp
@@ -323,9 +323,10 @@ From a factory image to a booting phone, as proven on cheetah (Pixel 7 Pro) on a
 
 # 3. Build through AOSP Build Capture (run-dir name is the verdict). ONE build at a time: two -j16 builds
 #    plus a gate exhausted a 62GB laptop and crashed the editor (2026-09-03); run lanes sequentially, and
-#    from a detached runner (setsid nohup) so no session timeout kills a build mid-way.
+#    from a detached runner (setsid nohup) so no session timeout kills a build mid-way. With the host to
+#    itself the full lanes default to -j20 (32 cores; -j16 measured 14GB still available).
 cd /path/to/AOSP_Build_Capture && ./bin/aosp_build_capture -lane aosp17_cheetah_nothing   # analysis gate, ~4 min
-./bin/aosp_build_capture -lane aosp17_cheetah -jobs 16                                    # m droid superimage, ~1.7 h
+./bin/aosp_build_capture -lane aosp17_cheetah                                              # m -j20 droid superimage, ~1.5 h
 
 # 4. Measure the images against the factory image before touching the phone (exit 1 on any FAIL)
 ./sovereign-lane-surgeon preflight -device cheetah -out /path/to/android-17.0.0_r1 -factory-images-root /path/to/factory-images

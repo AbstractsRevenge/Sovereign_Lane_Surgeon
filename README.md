@@ -246,14 +246,14 @@ A complete sovereign lane builds with **no** `ALLOW_MISSING_DEPENDENCIES` and **
 A lane forks a device that's still *present* in the target tree — `create -stock` instead **revives** a device family that isn't (dropped between AOSP releases, or never ported to a newer one). There's no stock parallel to drop here — the device simply doesn't exist in the target tree — so none of the lane machinery (finder routing, soong_config namespaces, `_<lane>` product suffixing) applies. Instead it mirrors the family **verbatim**, at its real stock path, no suffix:
 
 ```bash
-./sovereign-lane-surgeon create -stock -devices lynx,tangorpro -out /path/to/aosp-17 \
-    -kernel-version 6.12 -hw-subtrees hardware/google/gchips,hardware/google/graphics
+./sovereign-lane-surgeon create -stock -devices lynx,tangorpro -release cp2a \
+    -factory-images-root /path/to/factory-images -out /path/to/android-17.0.0_r1
 ```
 
-- **No external AOSP tree required.** The tool embeds a curated ~254MB subset of `android-15.0.0_r36`'s `device/google/{pantah,lynx,tangorpro,gs101,gs201,gs-common}(-sepolicy)` and `hardware/google/{gchips,graphics,pixel,pixel-sepolicy}` directly in the binary (`//go:embed`, see `embeddedassets.go`) — go build and run, no `repo sync` needed for these devices. Deliberately excludes the `-kernels/` prebuilt-kernel directories: they're both the dominant size cost and the wrong kernel version for a newer release anyway (a target release can need a kernel the embedded source never shipped — `-kernel-version` reconciles the *declaration*; the matching prebuilt kernel is a separate, per-target concern).
+- **No external AOSP tree required.** The binary embeds the device trees of every cp2a device family with an AOSP tree (~660MB, provenance per directory in `assets/aosp15_device.sources`) and the hardware HAL trees they reference; see "Every cp2a device with an AOSP tree is in the bundle" below.
 - **`-source-root <tree>`** is optional, not required — point it at a live tree to override the embedded bundle (tried first, falling back to embedded for anything it doesn't have) for a fresher copy or a device the bundle doesn't cover.
-- **`-kernel-version <ver>`** sets `TARGET_LINUX_KERNEL_VERSION` in every mirrored device's product mk(s) that already declare it.
-- **`-hw-subtrees <a,b,...>`** mirrors non-device-tree subtrees the same verbatim way (e.g. the hardware HAL trees above).
+- **`-kernel-version <ver>`** overrides `TARGET_LINUX_KERNEL_VERSION`; without it the version comes from the kernel inside the factory image (6.1 for the CP2A Pixel 7 family).
+- **`-hw-subtrees <a,b,...>`** adds seeds to the reference closure; for the Pixel families nothing needs naming (see "Fully required is derived" below).
 - **bp-parity check.** Every mirrored subtree is checked, file by file, against the reference it came from (embedded bundle or `-source-root`): any module the reference defines that an already-present target copy lacks is reported before you build. This catches the "plausible-looking stub" class that produces no error where it is introduced. **Limitation:** the reference is the AOSP 15 bundle, so the check cannot see AOSP 15 content that has overwritten a project the *target* release ships (see "Lessons from the android-17 revival" below).
 - **`-factory-images-root <dir>`** wires real vendor blobs from an already-extracted factory image (`<dir>/<device>/...`) into `vendor/google_devices/<device>/`, following the exact `self-extractors_<device>/` (or `self-extractors/`) mechanism the stock tree ships — Google's own source for the "Vendor image, Binaries for AOSP" self-extracting installer (see `vendorblobs.go`). System-image-embedded blobs (anything living inside `system_ext.img` etc.) are reported, not silently skipped — they need separate filesystem-image extraction. `fetch-factory-image` (below) populates exactly the directory layout this flag expects.
 - **`-release <rel>`** (e.g. `cp2a`) with `-factory-images-root` also **assembles the per-device kernel prebuilt directory** the target release names through `RELEASE_KERNEL_<DEVICE>_DIR` (cp2a → `device/google/pantah-kernels/6.1/26Q2-15260412`). That build is not published in AOSP (the public `pantah-kernels/6.1` project stops at android-15.0.0_r36), so the embedded bundle cannot carry it and the factory image is the only source: `boot.img` and `dtbo.img` verbatim, `Image.lz4` as boot.img's kernel payload, the first-stage modules and their load order out of `vendor_kernel_boot.img`'s LZ4-legacy cpio ramdisk, and the `vendor_dlkm` / `system_dlkm` module lists. Pure Go decoders (no `lz4` tool, no python module). It refuses to write a directory whose name (the flag) disagrees with the vendor modules' build id, keeps the *signed* copy when the same module ships in two partitions, and omits from `vendor_kernel_boot.modules.load` the modules the SoC board injects itself (`fips140.ko`), exactly as Google's shipped directory does. Standalone: `assemble-kernel -device <d> -release <rel> -out <root> -factory-images-root <dir>`.
@@ -307,28 +307,39 @@ The partition images `-factory-images-root` needs (`vendor.img`, `boot.img`, `ve
 
 ## Complete Device Revival Workflow (v0.4.0)
 
-The recommended workflow for reviving a physical device from scratch:
+From a factory image to a booting phone, as proven on cheetah (Pixel 7 Pro) on android-17.0.0_r1, 2026-09-03:
 
 ```bash
-# 1. Fetch and extract factory images (includes vendor content extraction)
-./sovereign-lane-surgeon fetch-factory-image -device panther -out /path/to/factory-images -i-accept-google-terms
+# 1. Fetch the CP2A factory image (16 devices in the manifest; resumable, SHA-256 verified)
+./sovereign-lane-surgeon fetch-factory-image -device cheetah -out /path/to/factory-images -i-accept-google-terms
 
-# 2. Revive the device (mirrors trees, sets kernel version, wires vendor blobs)
-./sovereign-lane-surgeon create -stock -devices panther -out /path/to/aosp-17 \
-    -kernel-version 6.12 \
-    -hw-subtrees hardware/google/gchips,hardware/google/graphics,hardware/google/pixel \
-    -factory-images-root /path/to/factory-images
+# 2. Revive the device: mirrors the family and everything it references, assembles the kernel dir from the
+#    image, reads the kernel version from it, wires the vendor blobs with their firmware requirements,
+#    and runs the ten target-compat operations the target tree is probed to need. ~3 s. No hand edit.
+./sovereign-lane-surgeon create -stock -devices cheetah -release cp2a \
+    -factory-images-root /path/to/factory-images -out /path/to/android-17.0.0_r1
 
-# 3. Build
-cd /path/to/aosp-17
-source build/envsetup.sh
-lunch aosp_panther-eng
-m -j16 droid
+# 3. Build through AOSP Build Capture (run-dir name is the verdict; -jobs 16 lets two lanes share a host)
+cd /path/to/AOSP_Build_Capture && ./bin/aosp_build_capture -lane aosp17_cheetah_nothing   # analysis gate, ~4 min
+./bin/aosp_build_capture -lane aosp17_cheetah -jobs 16                                    # m droid superimage, ~1.7 h
+
+# 4. Make the image flashable: android-17's Soong super omits the prebuilt vendor partitions
+./sovereign-lane-surgeon assemble-super -device cheetah -out /path/to/android-17.0.0_r1
+#    → <PRODUCT_OUT>/super_full.img + flash_cheetah.sh (firmware requirements, boot chain, vbmeta as signed,
+#      full super, explicit f2fs format of userdata/metadata, reboot)
+
+# 5. Flash (phone unlocked, in fastboot). The bootloader/radio the blobs require are flashed by you first
+#    if the phone's are older — the script prints the versions and the two commands.
+bash /path/to/android-17.0.0_r1/out-aosp17/cheetah/eng/target/product/cheetah/flash_cheetah.sh
+
+# 6. Tour / capture (Build Capture's runtime sibling; adb is the build's own host tool)
+PATH=/path/to/android-17.0.0_r1/out-aosp17/cheetah/eng/host/linux-x86/bin:$PATH \
+  ./bin/aosp_runtime_log_capture -device <serial> -lane aosp17_cheetah -label first-boot -pull-tombstones
 ```
 
-Every `m nothing` / `m droid` goes through **AOSP Build Capture** (lanes `aosp17_<device>` and `aosp17_<device>_nothing`), so each run leaves a run directory whose name is the verdict and a `terminal_log.json` that `audit` can classify.
-
----
+Measured on cheetah: adb at 40 s, `sys.boot_completed` at 70 s, SELinux enforcing, /data encrypted, orange
+verified-boot state, wifi scanning, 35 hardware services registered. Steps 1–4 and 6 are the toolkit's;
+step 5 is deliberate operator work (firmware and a wipe).
 
 ## Status
 

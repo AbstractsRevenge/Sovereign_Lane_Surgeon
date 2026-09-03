@@ -40,10 +40,10 @@ carry no `-pedantic`, only the system-property idiom.
 
 ## 🎯 Project Overview
 
-The Sovereign Lane Surgeon is a self-contained Go toolkit for creating parallel "lane" builds in AOSP without forking the entire tree. Currently, we are **extending it to fully automate physical device revival** for Pixel devices (Panther, Cheetah, Lynx, Tangorpro) on Android 17.
+The Sovereign Lane Surgeon is a self-contained Go toolkit for creating parallel "lane" builds in AOSP without forking the entire tree, and — as of v0.4.0 — for **reviving physical Pixel devices on a newer AOSP release** from the embedded device trees plus a factory image, with no hand edits.
 
 ### Primary Goal
-**Complete the end-to-end pipeline that takes a Pixel factory image and produces a working AOSP 17 build for that physical device.**
+**Complete the end-to-end pipeline that takes a Pixel factory image and produces a working AOSP 17 build for that physical device.** — Reached 2026-09-03: cheetah boots the Surgeon-built android-17 image.
 
 ---
 
@@ -52,67 +52,49 @@ The Sovereign Lane Surgeon is a self-contained Go toolkit for creating parallel 
 ### Core Toolkit Infrastructure
 | Component | Status | Details |
 |-----------|--------|---------|
-| Lane scaffolding (`create`) | ✅ Working | Generates device/emu products, stages soong patches |
+| Lane scaffolding (`create`) | ✅ Working | Generates device/emu products, stages soong patches; stock-seeded lanes proven to a green image (v0.4.0 branch, merged) |
 | Soong patch system | ✅ Working | Preview-then-apply with snapshots |
-| AST operations | ✅ Working | Blueprint/Go AST patching (no regex) |
+| AST operations | ✅ Working | Blueprint/Go AST patching (no regex): rename, drop-dep, requalify, cflag drop, AIDL re-pin, defaults pinning, header_libs add |
 | Uninstall/rollback | ✅ Working | Byte-identical reversal |
-| Audit/classification | ✅ Working | 17-class taxonomy for build failures |
+| Audit/classification | ✅ Working | 23-class taxonomy incl. the android-17 classes (illegal cflag, AIDL version conflict, system-props artifact path, neverallow violation, stale generated mk, kernel module rule collision) |
 | Test suite | ✅ Working | 112 tests, all passing (`go test ./...`) |
 
 ### Device Revival (`create -stock`)
 | Component | Status | Details |
 |-----------|--------|---------|
-| Embedded device trees | ✅ Working | ~254MB of AOSP 15 assets (pantah, lynx, tangorpro, gs101, gs201, gs-common) |
-| Embedded hardware HALs | ✅ Working | gchips, graphics, pixel, pixel-sepolicy |
-| Family/SoC resolution | ✅ Working | Auto-detects from tree or embedded bundle |
-| Tree mirroring | ✅ Working | Verbatin copy, no-clobber, .git-skipping |
-| Kernel version reconciliation | ✅ Working | Sets `TARGET_LINUX_KERNEL_VERSION` |
-| Hardware subtree mirroring | ✅ Working | `-hw-subtrees` flag |
-| Vendor blob wiring | ✅ Working | Parses `self-extractors_*`, copies partition images |
+| Embedded device trees | ✅ Working | every cp2a family with an AOSP tree: raviole, bluejay, pantah, lynx, tangorpro, felix, shusky, akita, caimito, comet (r36) + tegu (r31); SoC dirs gs101/gs201/zuma/zumapro; provenance in `assets/aosp15_device.sources` |
+| Embedded hardware HALs | ✅ Working | gchips, graphics (with the Soong-conversion overlay for graphics/common), pixel, pixel-sepolicy; per-family kernel headers |
+| Reference closure | ✅ Working | every device/google + hardware/google subtree the family references is mirrored transitively; upstream git projects left alone |
+| Target-compat pass | ✅ Working | 10 operations, each gated on a probe of the target tree (see README) |
+| Kernel prebuilt assembly | ✅ Working | from the factory image: boot/dtbo/Image.lz4, first-stage modules (vendor_kernel_boot or gs101's vendor_boot), dtb, lists, headers; version read from the image |
+| Vendor blob wiring | ✅ Working | self-extractor mechanism + factory android-info.txt (firmware requirements) via USE_ANDROID_INFO |
+| Vendor extraction | ✅ Working | vendor / vendor_dlkm / system_dlkm via debugfs, no root |
+| Executable bits | ✅ Working | exec manifest restores modes embed.FS drops |
+
+### Flashing (`assemble-super`, `flash_<device>.sh`)
+| Component | Status | Details |
+|-----------|--------|---------|
+| Complete super | ✅ Working | prebuilt vendor/vendor_dlkm packed with the build's own build_super_image |
+| Flash script | ✅ Working | firmware requirements, boot chain, vbmeta as signed, full super, explicit f2fs format, reboot |
+| Runtime capture | ✅ Working | Build Capture's `aosp_runtime_log_capture` with the build's host adb on PATH |
 
 ### Factory Image Fetching (`fetch-factory-image`)
 | Component | Status | Details |
 |-----------|--------|---------|
+| Manifest | ✅ Working | 16 cp2a devices, hand-verified URLs + SHA-256 (2026-09-02) |
 | Download with resume | ✅ Working | Accept-Ranges aware |
-| SHA-256 verification | ✅ Working | Against hand-verified manifest |
-| Outer ZIP extraction | ✅ Working | Zip-slip safe |
-| Inner image ZIP extraction | ✅ Working | Finds and extracts `image-*.zip` |
-| **Vendor image content extraction** | ✅ **NEW (v0.4.0)** | Extracts `vendor.img` and `vendor_dlkm.img` contents |
-
-### Vendor Image Content Extraction (v0.4.0)
-| Component | Status | Details |
-|-----------|--------|---------|
-| Sparse image detection | ✅ Working | `file` command |
-| Sparse→raw conversion | ✅ Working | `simg2img` |
-| Mount raw image | ✅ Working | `sudo mount -o loop` |
-| Copy files | ✅ Working | `rsync` or `sudo cp -r` fallback |
-| Unmount/cleanup | ✅ Working | Deferred cleanup |
-| Ownership fix | ✅ Working | `sudo chown` |
-| `vendor.img` → `proprietary/` | ✅ Working | All vendor blob files |
-| `vendor_dlkm.img` → `dlkm/` | ✅ Working | Kernel modules |
+| Extraction | ✅ Working | outer zip → image-*.zip → partition images, zip-slip safe |
 
 ---
 
 ## 🔧 What We're Currently Working On
 
-### Primary Task: Android 17 Panther Port
-We are using the Surgeon to port Panther (Pixel 7) to AOSP 17, validating the toolkit and identifying any gaps.
-
-**Current Status (2026-09-02):** `aosp_panther-cp2a-eng` `m nothing` is GREEN (Build Capture run `20260902T092636Z_panther_completed_bootstrap_nothing`, 0 Soong/kati/ninja errors, Soong re-analyzed). The earlier undefined modules were not missing between releases: the hand bring-up had overwritten `hardware/google` with AOSP 15 content and renamed 80 Blueprints to `.bak`. Full evidence and the change list: `15_17_device_build_diffs/ninja_d_analysis_20260902/`.
-
-| Issue | Status | Action |
-|-------|--------|--------|
-| Duplicate product definition | ✅ Fixed | Backup directories moved out of build tree |
-| Release config | ✅ Fixed | Using `aosp_panther-cp2a-eng` lunch combo |
-| `connection_manager` / `libgfxstream_backend` undefined | ✅ Fixed | Restored the 7 overwritten 17 git projects to HEAD (never copy a project the target manifest ships) |
-| hwc3 cross-namespace deps | ✅ Fixed | `hardware/google/graphics/common` now the upstream main checkout that converted hwc3/libhwc2.1 to Soong |
-| health AIDL V4 vs V5, `-pedantic`, fabricated kernel bp, zuma rename, system-partition props | ✅ Fixed | See CHANGELOG_port_20260902.md |
-| `m nothing` success | ✅ Done | Panther and Cheetah green 2026-09-02 (`aosp_<device>-cp2a-eng`, Build Capture `completed_bootstrap`, 0 errors) |
+### Primary Task: android-17 port — done for the Pixel 7 family
+**Status (2026-09-03):** all 16 cp2a devices `m nothing` green from `create -stock` alone; full images for panther, cheetah, lynx, tangorpro; cheetah booted and toured. Remaining full builds beyond felix/oriole deferred by decision (no test devices for those families). Next horizon (T): Holo transformations on top of the revived devices.
 
 ### Secondary Task: Documentation
-- [x] Update `README.md` with v0.4.0 enhancements
-- [x] Create `CURRENT_STATE.md` (this document)
-- [ ] Document known limitations and workarounds
+- [x] README, CURRENT_STATE, port changelog current as of 2026-09-03
+- [x] Known limitations and workarounds documented below
 
 ---
 
@@ -122,10 +104,12 @@ We are using the Surgeon to port Panther (Pixel 7) to AOSP 17, validating the to
 
 | Limitation | Impact | Workaround |
 |------------|--------|------------|
-| `system_ext.img` contents not extracted | Vendor blobs inside system_ext missing | Manual mount/extract needed |
+| `system_ext.img` contents not extracted | 5–7 blobs per device the self-extractor lists inside system_ext.img (ShannonIms/Rcs, libmediaadaptor, UwbVendorService) are absent from the built image — IMS/RCS/UWB-vendor features only | debugfs-rdump the factory system_ext.img and copy them by hand |
 | Projects the target manifest ships must never be overwritten from AOSP 15 | Duplicate/undefined modules that surface far from the cause | Restore from the project's git HEAD; only copy directories absent from the target manifest |
 | Kernel prebuilt dir is not in AOSP for cp2a | Board reads `RELEASE_KERNEL_<DEVICE>_DIR` | `create -stock -release cp2a` / `assemble-kernel` builds it from the factory image (pure Go, no root) |
 | `simg2img` required | Vendor image extraction fails | `sudo apt-get install android-sdk-libsparse-utils` |
+| Firmware flash is manual | A vendor on older bootloader/baseband dies at ~65 s with no log | `flash_<device>.sh` prints the required versions and the two fastboot commands; the tool never flashes firmware |
+| Camera on T's cheetah | provider crash-loops (KRAKEN I2C ENXIO) | hardware fault of the unit — identical on stock |
 | Sudo required for mount | Only when `debugfs` is absent | Install e2fsprogs; `debugfs rdump` is tried first and needs no root |
 
 ### Future Enhancements
@@ -133,11 +117,11 @@ We are using the Surgeon to port Panther (Pixel 7) to AOSP 17, validating the to
 | Feature | Priority | Description |
 |---------|----------|-------------|
 | `system_ext.img` extraction | 🔴 High | Mount/extract system_ext.img contents |
-| Full `m droid` validation | 🔴 High | Test physical device boot |
+| Full `m droid` validation | ✅ Done | cheetah booted 2026-09-03 |
 | `doctor` auto-apply | 🟡 Medium | Automated fix application from audit |
 | Kernel prebuilt fetch | ✅ Done | `assemble-kernel` from the factory image (v0.4.0) |
 | Android 16 support | 🟡 Medium | Test/update for AOSP 16 |
-| Additional devices | 🟢 Low | Support for more Pixel devices |
+| Additional devices | ✅ Done (analysis gate) | all 16 cp2a devices with an AOSP tree; full builds for zuma/zumapro families on demand |
 | Docker/container support | 🟢 Low | Root-free path exists now (debugfs); containerizing is what remains |
 
 ---
@@ -147,24 +131,19 @@ We are using the Surgeon to port Panther (Pixel 7) to AOSP 17, validating the to
 ### Physical Device Revival Progress
 
 ```
-Panther (Pixel 7) - Android 17 Port
-├── [✅] Surgeon built and working
-├── [✅] Factory image downloaded and verified
-├── [✅] Outer ZIP extracted
-├── [✅] Inner image ZIP extracted
-├── [✅] Vendor.img contents extracted → vendor/google_devices/panther/proprietary/
-├── [✅] Vendor_dlkm.img contents extracted → vendor/google_devices/panther/dlkm/
-├── [✅] Device trees mirrored from embedded assets
-├── [✅] Kernel prebuilt dir assembled from the factory image (6.1, build 26Q2-15260412)
-├── [✅] Hardware subtrees mirrored
-├── [✅] Lunch succeeds (aosp_panther-cp2a-eng)
-├── [✅] Build reaches 2% completion
-├── [✅] Undefined module dependencies fixed
-├── [✅] m nothing succeeds (2026-09-02)
-├── [⏳] m droid succeeds
-└── [⏳] Physical device boot validation
+Pixel 7 family (pantah/lynx/tangorpro, gs201) - android-17.0.0_r1
+├── [✅] Factory images fetched and verified (CP2A.260705.006)
+├── [✅] Vendor / vendor_dlkm / system_dlkm extracted (debugfs, no root)
+├── [✅] Device trees + referenced subtrees mirrored from the embedded bundle
+├── [✅] Kernel prebuilt dirs assembled from the images (6.1, 26Q2-15260412)
+├── [✅] Target-compat pass (10 operations) — no hand edit
+├── [✅] m nothing green: panther, cheetah, lynx, tangorpro (and the other 12 devices)
+├── [✅] m droid superimage: cheetah, panther, lynx, tangorpro
+├── [✅] assemble-super + flash script
+├── [✅] Physical device boot: cheetah (lock screen 70 s, adb, enforcing, encrypted)
+└── [✅] Tour + runtime capture (camera fault traced to the unit's hardware)
 
-Overall: 15/17 steps completed (88%)
+Overall: complete for the Pixel 7 family. Other families: analysis gate complete; full builds on demand.
 ```
 
 ### Code Enhancement Progress

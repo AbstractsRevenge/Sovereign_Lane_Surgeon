@@ -24,6 +24,10 @@ copyright and year unchanged: `assets/aosp15_device/**` (the mirrored device tre
 (upstream Soong-conversion sources) and `internal/blueprint/**` (the vendored Blueprint parser).
 Relicensing or re-dating those would misstate their provenance.
 
+Binary assets — the screenshots under `wiki/images/`, and anything else that cannot hold a comment
+— are covered by the repository's `LICENSE` instead. They are excluded by extension, listed
+explicitly in the test rather than skipped silently, so adding one is a deliberate act.
+
 `licenses_test.go` enforces this: it walks every tracked file, applies those exclusions, and fails
 the suite when an authored file is missing the header — the same way `docs_test.go` fails when the
 documentation drifts from the code.

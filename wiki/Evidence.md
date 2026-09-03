@@ -36,25 +36,44 @@ no prose can:
 The suite also fails when the documentation drifts from the code, or when an authored file is
 missing its licence header.
 
-## The boot
+## The ROM running
 
-A Pixel 7 Pro running an image this toolkit seeded, built and flashed. Second proof, on the super
-image the build produced itself rather than one assembled afterwards.
+The build, on the phone, photographed from the phone. Two screens, each proving something the
+other cannot.
 
-![cheetah running an android-17 image built from AOSP source](images/cheetah-lockscreen.png)
+### It is an AOSP build, not a repackaged Google one
 
-A lock screen looks like any other lock screen, so it proves little alone. This is what makes it
-evidence:
+![cheetah home screen: the AOSP launcher and app set, with no Google apps](images/cheetah-home.png)
+
+AOSP's own launcher, and AOSP's own applications: Phone, Messaging, Gallery, Camera. No search
+bar, no Play Store, no Google Mobile Services anywhere. A Pixel running Google's shipping android-17
+does not look like this. This is what a build from source looks like when it reaches the launcher.
+
+### It is android-17, from this source, on the factory kernel
+
+![cheetah Android version: build number aosp_cheetah-eng 17, kernel 6.1.157 ab14791245](images/cheetah-android-version.png)
+
+Everything the toolkit does is legible on one screen:
+
+| Field | Value | What it shows |
+|---|---|---|
+| Android version | 17 | the target release |
+| Build number | `aosp_cheetah-eng 17 CP2A.260605.016 eng.abstra test-keys` | an **AOSP engineering build**, from source, test-keys — not Google's `user`/`release-keys` image |
+| Kernel version | `6.1.157-android14-11-gbd23337e42e7-ab14791245` | the kernel **out of the factory image**, assembled into the prebuilt directory the release names. AOSP never published this build |
+| Baseband | `g5300q-260317-260505-B-15346003` | Google's radio firmware, which the vendor blobs require |
+
+That combination is the whole thesis: a system built from AOSP source, running on the vendor
+partition, kernel and firmware taken from Google's factory image, on hardware whose device tree
+android-17 does not ship.
+
+The same facts from the device, without a screenshot in the way:
 
 ```
 ro.build.fingerprint         Android/aosp_cheetah/cheetah:17/CP2A.260605.016/eng.abstra:eng/test-keys
 ro.vendor.build.fingerprint  google/cheetah/cheetah:17/CP2A.260705.006/15641320:user/release-keys
 ```
 
-The system side is an **AOSP engineering build, signed with test keys**, built from source on a
-workstation. The vendor side is **Google's release vendor image**, user build, release keys. Those
-two halves running together on one phone is the entire point of the toolkit, and it is not
-something a screenshot alone could show.
+An AOSP system fingerprint beside a Google release vendor fingerprint, on one device.
 
 Measured on that boot:
 

@@ -39,6 +39,16 @@ var upstreamPrefixes = []string{
 	"internal/blueprint/",       // vendored Blueprint parser, Google 2014
 }
 
+// binaryAssets cannot carry a comment at all. They are covered by the repository LICENSE, and
+// listed here rather than skipped silently so that adding one is a deliberate act.
+func isBinaryAsset(rel string) bool {
+	switch strings.ToLower(filepath.Ext(rel)) {
+	case ".png", ".jpg", ".jpeg", ".gif", ".webp", ".ico", ".pdf", ".zip", ".gz", ".img":
+		return true
+	}
+	return false
+}
+
 // noHeaderNeeded cannot carry a comment, or has no comment convention worth imposing.
 var noHeaderNeeded = map[string]bool{
 	"go.mod":  true, // module files take no license header by convention
@@ -66,7 +76,7 @@ func trackedFiles(t *testing.T) []string {
 }
 
 func authoredHere(rel string) bool {
-	if noHeaderNeeded[rel] {
+	if noHeaderNeeded[rel] || isBinaryAsset(rel) {
 		return false
 	}
 	for _, p := range upstreamPrefixes {
@@ -91,6 +101,9 @@ func TestEveryAuthoredFileCarriesTheApacheHeader(t *testing.T) {
 		}
 		b, err := os.ReadFile(rel)
 		if err != nil {
+			if os.IsNotExist(err) {
+				continue // tracked but deleted in the worktree: a staging state, not a licence problem
+			}
 			t.Errorf("%s: %v", rel, err)
 			continue
 		}
@@ -117,10 +130,7 @@ func TestUpstreamFilesKeepTheirOwnCopyright(t *testing.T) {
 	const project = "Copyright 2026 Sovereign Lane Surgeon"
 	checked := 0
 	for _, rel := range trackedFiles(t) {
-		if authoredHere(rel) {
-			continue
-		}
-		if noHeaderNeeded[rel] {
+		if authoredHere(rel) || noHeaderNeeded[rel] || isBinaryAsset(rel) {
 			continue
 		}
 		b, err := os.ReadFile(rel)

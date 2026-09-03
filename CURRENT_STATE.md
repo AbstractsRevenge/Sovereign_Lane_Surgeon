@@ -10,12 +10,12 @@
 ## cp2a device coverage (android-17.0.0_r1, updated 2026-09-02)
 
 The cp2a release names 20 devices; 16 have an AOSP tree (Pixel 10 family: blazer, frankel, mustang,
-rango, stallion have CP2A factory images but no tree in any tag — out of reach). **Milestone 2026-09-02 13:11 UTC: all 16 devices `m nothing` green on android-17.0.0_r1 from `create -stock` alone.** **Milestone 15:25 UTC: cheetah `m droid superimage` completed (run 152554Z) — the first full android-17 image for a Pixel from the Surgeon's own tree.** Status per device:
+rango, stallion have CP2A factory images but no tree in any tag — out of reach). **Milestone 2026-09-02 13:11 UTC: all 16 devices `m nothing` green on android-17.0.0_r1 from `create -stock` alone.** **Milestone 2026-09-03 01:12 UTC: cheetah BOOTS the Surgeon-built android-17 image (lock screen, adb, enforcing, encrypted) — first Pixel running android-17 from this toolkit.** **Milestone 15:25 UTC: cheetah `m droid superimage` completed (run 152554Z) — the first full android-17 image for a Pixel from the Surgeon's own tree.** Status per device:
 
 | device | family / SoC | tree source | factory image | `create -stock` | `m nothing` | full build | flashed |
 |---|---|---|---|---|---|---|---|
 | panther | pantah / gs201 | r36 | CP2A.260705.006 | ✅ replayed from wiped tree | ✅ 120519Z | ✅ 153638Z full_completed | — |
-| cheetah | pantah / gs201 | r36 | CP2A.260705.006 | ✅ | ✅ 120945Z | ✅ 152554Z full_completed (super.img); 10 attempts, each a new compat op or bundle asset: 5 libion header, 6 statsd proto, 7 sepolicy types, kernel-headers, 8 neverallows, 9 -Wno-error, 10 power HAL V6 | ⏳ flashed 23:38Z; boot failed ×4 → three flash-method faults found and fixed in the toolkit (super lacked vendor; --disable-verification; -w erases only); 4th: phone firmware (cloudripper-15.2) older than the blobs require (17.0-15199429) — firmware flash with T |
+| cheetah | pantah / gs201 | r36 | CP2A.260705.006 | ✅ | ✅ 120945Z | ✅ 152554Z full_completed (super.img); 10 attempts, each a new compat op or bundle asset: 5 libion header, 6 statsd proto, 7 sepolicy types, kernel-headers, 8 neverallows, 9 -Wno-error, 10 power HAL V6 | ✅ 01:11Z flashed with flash_cheetah.sh sequence, booted in 70 s: our eng build over the CP2A vendor blob, SELinux enforcing, /data encrypted, display/battery/wifi/adb up, orange state. Defect: main camera sensor (KRAKEN) I2C writes fail ENXIO at the hardware level → Google camera HAL restarts every 5 s (other sensor inits fine) |
 | lynx | lynx / gs201 | r36 | CP2A.260705.006 | ✅ | ✅ 121328Z | ✅ 171442Z full_completed | — |
 | tangorpro | tangorpro / gs201 | r36 | CP2A.260705.006 | ✅ | ✅ 121701Z | ✅ 223034Z full_completed (from-scratch after the crash left corrupt intermediates) | — |
 | felix | felix / gs201 | r36 | CP2A.260705.006 | ✅ | ✅ 122559Z | ⏳ | — |

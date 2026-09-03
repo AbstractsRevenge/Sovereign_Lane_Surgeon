@@ -18,16 +18,16 @@ rango, stallion have CP2A factory images but no tree in any tag — out of reach
 | cheetah | pantah / gs201 | r36 | CP2A.260705.006 | ✅ | ✅ 120945Z | ✅ 152554Z full_completed (super.img); 10 attempts, each a new compat op or bundle asset: 5 libion header, 6 statsd proto, 7 sepolicy types, kernel-headers, 8 neverallows, 9 -Wno-error, 10 power HAL V6 | ✅ 01:11Z flashed with flash_cheetah.sh sequence, booted in 70 s: our eng build over the CP2A vendor blob, SELinux enforcing, /data encrypted, display/battery/wifi/adb up, orange state. Defect: main camera sensor (KRAKEN) I2C writes fail ENXIO at the hardware level → Google camera HAL restarts every 5 s (other sensor inits fine) |
 | lynx | lynx / gs201 | r36 | CP2A.260705.006 | ✅ | ✅ 121328Z | ✅ 171442Z full_completed | — |
 | tangorpro | tangorpro / gs201 | r36 | CP2A.260705.006 | ✅ | ✅ 121701Z | ✅ 223034Z full_completed (from-scratch after the crash left corrupt intermediates) | — |
-| felix | felix / gs201 | r36 | CP2A.260705.006 | ✅ | ✅ 054324Z (re-gated) | ⏳ queued (-j20, after oriole) | — |
-| oriole | raviole / gs101 | r36 | CP2A.260705.006.A1 | ✅ (kernel from vendor_boot.img) | ✅ 053213Z (re-gated) | ⏳ running (-j16, restarted 07:26Z 2026-09-03) | — |
+| felix | felix / gs201 | r36 | CP2A.260705.006 | ✅ | ✅ 054324Z (re-gated) | ✅ 075845Z full_completed (-j20) | preflight FLASHABLE |
+| oriole | raviole / gs101 | r36 | CP2A.260705.006.A1 | ✅ (kernel from vendor_boot.img) | ✅ 053213Z (re-gated) | ✅ 072701Z full_completed | preflight FLASHABLE (gs101 layout: no init_boot/vendor_kernel_boot, no system_dlkm — derived from the factory image, not assumed) |
 | raven | raviole / gs101 | r36 | CP2A.260705.006.A1 | ✅ | ✅ 123025Z | ⏳ | — |
 | bluejay | bluejay / gs101 | r36 | CP2A.260705.006.A1 | ✅ | ✅ 123425Z | ⏳ | — |
 | shiba | shusky / zuma | r36 | CP2A.260805.005 | ✅ | ✅ 124842Z | ⏳ | — |
-| husky | shusky / zuma | r36 | CP2A.260805.005 | ✅ | ✅ 125137Z | ⏳ | — |
+| husky | shusky / zuma | r36 | CP2A.260805.005 | ✅ | ✅ 125137Z | ⏳ running (-j20, one per SoC family) | — |
 | akita | akita / zuma | r36 | CP2A.260805.005 | ✅ | ✅ 125430Z | ⏳ | — |
 | tokay | caimito / zumapro | r36 | CP2A.260805.005.A1 | ✅ | ✅ 123822Z | ⏳ | — |
 | caiman | caimito / zumapro | r36 | CP2A.260805.005.A1 | ✅ | ✅ 124121Z | ⏳ | — |
-| komodo | caimito / zumapro | r36 | CP2A.260805.005.A1 | ✅ | ✅ 125721Z | ⏳ | — |
+| komodo | caimito / zumapro | r36 | CP2A.260805.005.A1 | ✅ | ✅ 125721Z | ⏳ running (-j20, one per SoC family) | — |
 | comet | comet / zumapro | r36 | CP2A.260805.005.A1 | ✅ | ✅ 130022Z | ⏳ | — |
 | tegu | tegu / zumapro | **r31** (Pixel 9a's own branch) | CP2A.260805.005 | ✅ (its include-only root Android.mk is denylisted by 17 and removed) | ✅ 131105Z (after the reconciliation) | ⏳ | — |
 
@@ -206,7 +206,7 @@ Complete: 6/8 tasks (75%)
 1. [x] Run `m droid superimage` successfully — cheetah 152554Z, panther 153638Z, lynx 171442Z, tangorpro 223034Z (six new compat ops + kernel headers came out of cheetah's ten attempts)
 2. [x] Boot on a physical device — cheetah, 2026-09-03 01:12 UTC (`assemble-super` + `flash_cheetah.sh`; firmware, vbmeta-as-signed and explicit f2fs format were the three flash lessons)
 3. [x] Port Cheetah, Lynx, Tangorpro — and the other twelve cp2a devices at the `m nothing` gate
-5. [ ] Full builds on the fixed glue: gs201 family done (panther 071321Z, lynx 071754Z, tangorpro 072229Z, cheetah 062805Z — all preflight FLASHABLE); oriole (gs101) running, felix queued at -j20; the other ten deferred by decision (no test devices).
+5. [ ] Full builds on the fixed glue: **gs201 complete** (cheetah 062805Z, panther 071321Z, lynx 071754Z, tangorpro 072229Z, felix 075845Z) and **gs101 proven** (oriole 072701Z) — every one preflight FLASHABLE. Running now, one build at a time at -j20: husky (zuma), komodo (zumapro), tegu (its own r31 tree) — one device per SoC family with no full-image proof yet. Their seven siblings stay deferred (no test devices; identical trees and gates).
 5. [x] Cheetah camera — CLOSED as a fault of this unit, not the port (2026-09-03 02:18Z). Control test on stock (factory system, vendor and boot chain, matching firmware, captured with the same tool into `…/20260903T021809Z_boot_ok_stock-camera-black/`): 0 camera devices, 414 provider crashes, all 32 tombstones carry the identical abort `KRAKEN init error … LwisFence signal status: No such device or address`, rear and front cameras black. Our image's chain of evidence (kernel `lwis-sensor-kraken: I2C Write failed (-6)` → HAL abort loop → camera service add/remove → 0 devices → Camera2 app AIOOBE) is the same fault seen from an eng build. Boot images, module loading and bootconfig were each excluded on the way (factory boot chain over our super fails identically).
 
 ### Medium-term (This Month)

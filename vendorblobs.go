@@ -154,36 +154,59 @@ func locateBlob(factoryDir, vendorDir, entry string) (string, error) {
 }
 
 // blobDestination derives where a wired blob goes under proprietary/ from the files that
-// CONSUME it: the self-extractor's staging device-partial.mk (PRODUCT_COPY_FILES source paths),
-// Android.bp.txt (prebuilt srcs such as "lib64/libmediaadaptor.so") and Android.mk.template
-// (LOCAL_SRC_FILES). The first path ending in "/<base>" wins; a blob nobody names by path lands
-// flat, which is what Google's installer does (unzip -j). Checked against the real cheetah
-// staging files: xml and apk flat, libmediaadaptor.so under lib64/.
-func blobDestination(sxDir, device, base string) string {
+// CONSUME it: the self-extractor's staging device-partial.mk (PRODUCT_COPY_FILES source paths,
+// always vendor/google_devices/<device>/proprietary/… — the pair's other half is the INSTALL
+// path and never a location under proprietary/), Android.bp.txt (prebuilt srcs relative to
+// proprietary/, such as "lib64/libmediaadaptor.so") and Android.mk.template. entry is the
+// extract-list path ("system_ext/lib64/libmediaadaptor.so"). Among the consumer paths ending in
+// the entry's base name, the one whose directory matches the entry's own parent directory wins
+// (lib64/ ↔ lib64/); a flat consumer path takes an entry from any other directory. A blob nobody
+// names by path lands flat, which is what Google's installer does (unzip -j). Checked against the
+// real staging files: cheetah has one libmediaadaptor (lib64/); oriole/raven/bluejay ship a
+// 32-bit lib/ copy the Android.bp names flat AND a lib64/ copy — placing by base name alone put
+// the 64-bit file flat and skipped the 32-bit one (observed: lynx gate 051644Z failed on oriole's
+// missing lib64/libmediaadaptor.so, since Soong parses every Android.bp in the tree).
+func blobDestination(sxDir, device, entry string) string {
+	base := filepath.Base(entry)
+	entryDir := filepath.Base(filepath.Dir(entry))
 	staging := filepath.Join(sxDir, "google_devices", "staging")
 	prefix := "vendor/google_devices/" + device + "/proprietary/"
+	sep := func(r rune) bool {
+		return r == ' ' || r == '\t' || r == '"' || r == ':' || r == ',' || r == '\n' || r == '\\' || r == '[' || r == ']'
+	}
+	var candidates []string
 	for _, f := range []string{"device-partial.mk", "Android.bp.txt", "Android.mk.template"} {
 		b, err := os.ReadFile(filepath.Join(staging, f))
 		if err != nil {
 			continue
 		}
-		for _, tok := range strings.FieldsFunc(string(b), func(r rune) bool {
-			return r == ' ' || r == '\t' || r == '"' || r == ':' || r == ',' || r == '\n' || r == '\\' || r == '[' || r == ']'
-		}) {
+		mk := strings.HasSuffix(f, ".mk")
+		for _, tok := range strings.FieldsFunc(string(b), sep) {
 			if !strings.HasSuffix(tok, "/"+base) && tok != base {
 				continue
 			}
-			rel := strings.TrimPrefix(tok, prefix)
-			if strings.HasPrefix(rel, "/") || strings.Contains(rel, "..") || strings.HasPrefix(rel, "$") {
+			if mk && !strings.HasPrefix(tok, prefix) {
 				continue
 			}
-			if rel == base {
-				return base
+			rel := strings.TrimPrefix(tok, prefix)
+			if strings.HasPrefix(rel, "/") || strings.Contains(rel, "..") || strings.HasPrefix(rel, "$") || strings.Contains(rel, "vendor/google_devices") {
+				continue
 			}
-			if strings.Contains(rel, "/") && !strings.Contains(rel, "vendor/google_devices") {
-				return rel
-			}
+			candidates = append(candidates, rel)
 		}
+	}
+	for _, c := range candidates {
+		if c != base && filepath.Base(filepath.Dir(c)) == entryDir {
+			return c
+		}
+	}
+	for _, c := range candidates {
+		if c == base {
+			return base
+		}
+	}
+	if len(candidates) > 0 {
+		return candidates[0]
 	}
 	return base
 }
@@ -248,7 +271,7 @@ func wireVendorBlobs(outRoot, family, device, factoryDir string) error {
 	var wired, skipped int
 	var skipReasons []string
 	for _, entry := range entries {
-		dst := filepath.Join(propDir, blobDestination(sxDir, device, filepath.Base(entry)))
+		dst := filepath.Join(propDir, blobDestination(sxDir, device, entry))
 		if _, statErr := os.Stat(dst); statErr == nil {
 			wired++
 			continue // no-clobber

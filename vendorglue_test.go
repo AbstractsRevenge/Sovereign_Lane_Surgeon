@@ -85,15 +85,23 @@ func TestGlueDestinationIsReadFromTheIncludingTree(t *testing.T) {
 func TestBlobDestinationFollowsTheConsumers(t *testing.T) {
 	root := t.TempDir()
 	sx := fixtureSelfExtractor(t, root)
-	for base, want := range map[string]string{
-		"libmediaadaptor.so":         "lib64/libmediaadaptor.so", // Android.bp.txt srcs
-		"com.shannon.imsservice.xml": "com.shannon.imsservice.xml",
-		"ShannonIms.apk":             "ShannonIms.apk",
-		"vendor.img":                 "vendor.img",
+	for entry, want := range map[string]string{
+		"system_ext/lib64/libmediaadaptor.so":                   "lib64/libmediaadaptor.so", // Android.bp.txt srcs
+		"system_ext/etc/permissions/com.shannon.imsservice.xml": "com.shannon.imsservice.xml",
+		"system_ext/priv-app/ShannonIms/ShannonIms.apk":         "ShannonIms.apk",
+		"IMAGES/vendor.img":                                     "vendor.img",
 	} {
-		if got := filepath.ToSlash(blobDestination(sx, "dev", base)); got != want {
-			t.Errorf("%s: got %q want %q", base, got, want)
+		if got := filepath.ToSlash(blobDestination(sx, "dev", entry)); got != want {
+			t.Errorf("%s: got %q want %q", entry, got, want)
 		}
+	}
+	// oriole's shape: a 32-bit lib/ copy the Android.bp names flat AND a lib64/ copy.
+	write(t, filepath.Join(sx, "google_devices", "staging", "Android.bp.txt"), "cc_prebuilt_library_shared {\n    name: \"libmediaadaptor\",\n    arch: { arm: { srcs: [\"libmediaadaptor.so\"] }, arm64: { srcs: [\"lib64/libmediaadaptor.so\"] } },\n}\n")
+	if got := filepath.ToSlash(blobDestination(sx, "dev", "system_ext/lib64/libmediaadaptor.so")); got != "lib64/libmediaadaptor.so" {
+		t.Errorf("lib64 entry: got %q", got)
+	}
+	if got := filepath.ToSlash(blobDestination(sx, "dev", "system_ext/lib/libmediaadaptor.so")); got != "libmediaadaptor.so" {
+		t.Errorf("lib entry: got %q", got)
 	}
 }
 

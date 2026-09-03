@@ -66,6 +66,7 @@ type stockArgs struct {
 	hwSubtrees        string
 	factoryImagesRoot string
 	release           string
+	noVerify          bool
 }
 
 // preSeedFromEmbedded ensures device/google/<family> exists under outRoot before lane device
@@ -133,7 +134,29 @@ func cmdCreateStock(a stockArgs) int {
 		FactoryImagesRoot: a.factoryImagesRoot,
 		Release:           a.release,
 	}
-	return writeStockScaffold(cfg, a.out)
+	rc := writeStockScaffold(cfg, a.out)
+	if rc != 0 {
+		return rc
+	}
+	// Verify what was just written. Every defect this port hit was a seed that LOOKED complete —
+	// glue one directory from where the device tree includes it, a blob flat where a Blueprint
+	// named it under lib64/, a symlink that never arrived — and each one surfaced 25 to 46
+	// minutes into a full build, or at a black screen. The checks are derived from the tree, so
+	// they cost a second and need no per-device knowledge. -no-verify opts out.
+	if a.noVerify {
+		return 0
+	}
+	fmt.Println()
+	fails := 0
+	for _, d := range devs {
+		fails += reportSeedVerification(d, verifySeed(a.out, d, "", a.release))
+	}
+	if fails > 0 {
+		fmt.Fprintf(os.Stderr, "\ncreate -stock: %d structural check(s) FAILED — the seed is not complete (see above)\n", fails)
+		return 1
+	}
+	fmt.Println("\n  the seeded tree satisfies every structural invariant the build depends on")
+	return 0
 }
 
 // neutralizedByBak reports whether target has been deliberately disabled via a "<file>.bak"

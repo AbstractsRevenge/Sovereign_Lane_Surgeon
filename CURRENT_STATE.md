@@ -57,12 +57,13 @@ The Sovereign Lane Surgeon is a self-contained Go toolkit for creating parallel 
 | AST operations | ✅ Working | Blueprint/Go AST patching (no regex): rename, drop-dep, requalify, cflag drop, AIDL re-pin, defaults pinning, header_libs add |
 | Uninstall/rollback | ✅ Working | Byte-identical reversal |
 | Audit/classification | ✅ Working | 23-class taxonomy incl. the android-17 classes (illegal cflag, AIDL version conflict, system-props artifact path, neverallow violation, stale generated mk, kernel module rule collision) |
-| Test suite | ✅ Working | 135 tests, all passing (`go test ./...`); `docs_test.go` fails the suite when README/CURRENT_STATE drift from the code |
+| Test suite | ✅ Working | 139 tests, all passing (`go test ./...`), including an **end-to-end seed** from the embedded bundle into a temp root (and, with `SLS_TEST_FACTORY_ROOT` set, the full vendor-blob pipeline); `docs_test.go` fails the suite when README/CURRENT_STATE drift from the code |
 
 ### Device Revival (`create -stock`)
 | Component | Status | Details |
 |-----------|--------|---------|
-| Bundle fidelity | ✅ Working | embed.FS drops exec bits AND symlinks; both travel as generated manifests (`.exec`, `.symlinks`) — the symlink loss cost a 46-minute husky build before it was found |
+| Bundle fidelity | ✅ **Proven** | embed.FS carries content only. All four properties travel as manifests from ONE generator (`.sha256`, `.exec`, `.symlinks`, `.dirs`); `bundle audit -source <tree>` compares the bundle against a real AOSP tree and found **zero divergence across 9671 entries / 32 directories** (2026-09-03) |
+| Seed self-check | ✅ Working | `verify-seed`, run automatically by `create -stock`: vendor glue reachable, blobs where their consumers name them, exec bits and symlinks intact, kernel dir populated, Blueprints parse — all derived from the tree. Replays all three of this port's real defects and catches each |
 | Embedded device trees | ✅ Working | every cp2a family with an AOSP tree: raviole, bluejay, pantah, lynx, tangorpro, felix, shusky, akita, caimito, comet (r36) + tegu (r31); SoC dirs gs101/gs201/zuma/zumapro; provenance in `assets/aosp15_device.sources` |
 | Embedded hardware HALs | ✅ Working | gchips, graphics (with the Soong-conversion overlay for graphics/common), pixel, pixel-sepolicy; per-family kernel headers |
 | Reference closure | ✅ Working | every device/google + hardware/google subtree the family references is mirrored transitively; upstream git projects left alone |

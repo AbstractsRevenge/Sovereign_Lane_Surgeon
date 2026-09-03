@@ -96,6 +96,8 @@ func main() {
 		os.Exit(cmdCompatPropose(args))
 	case "preflight":
 		os.Exit(cmdPreflight(args))
+	case "verify-seed":
+		os.Exit(cmdVerifySeed(args))
 	case "version", "-v", "--version":
 		fmt.Println("sovereign-lane-surgeon", version)
 	case "help", "-h", "--help":
@@ -175,6 +177,13 @@ SUBCOMMANDS:
                                build_super_image + misc_info), and write flash_<d>.sh with the proven flash
                                sequence (firmware requirements from the blobs' android-info.txt, vbmeta as
                                signed, explicit f2fs format of userdata/metadata).
+  verify-seed -out <root> -devices <a,b> [-release <rel>]
+                               Check a seeded tree against the invariants the build depends on:
+                               every vendor makefile the device tree includes exists, every blob the
+                               vendor makefiles/Blueprints name is where they name it, the bundle's
+                               executable bits and symlinks survived, the kernel prebuilt dir is
+                               populated, every Blueprint parses. Derived from the tree, not a
+                               per-device list. create -stock runs this automatically.
   preflight -device <d> -out <root> [-build-out <dir>] [-factory-images-root <dir>]
                                Before flashing, measure the built images against the factory image:
                                kernel release, super holds every factory-layout partition and fits,
@@ -186,12 +195,14 @@ SUBCOMMANDS:
                                operations need (lost header re-export, renamed proto option,
                                neverallowed statement): the facts are looked up in the target tree
                                and printed in the manifests' own format (or appended with -write-to).
-  bundle info | verify [-dir <d>] | export -out <dir>
-                               The device-tree bundle as content-addressed data: its manifest (sha256 of
-                               every file) is always embedded, the content is embedded by default or
-                               supplied at run time to a -tags nobundle build (create -bundle-dir /
-                               -bundle-url, $SLS_BUNDLE_DIR / $SLS_BUNDLE_URL, verified before use).
-                               export writes the archive + manifest for publishing.
+  bundle info | verify [-dir <d>] | export -out <dir> | audit -source <aosp tree>
+                               The device-tree bundle as content-addressed data: its manifests (content,
+                               executable bits, symlinks, empty dirs — everything go:embed can lose) are
+                               always embedded, the content is embedded by default or supplied at run
+                               time to a -tags nobundle build (create -bundle-dir / -bundle-url,
+                               $SLS_BUNDLE_DIR / $SLS_BUNDLE_URL, verified before use). export writes the
+                               archive + manifests for publishing; audit proves the bundle is a faithful
+                               copy of the AOSP tree it was cut from (repeat -source per tag).
   version
 
 The taxonomy + method are documented in holo_lane_sovereignty_handoff_20260711.md §22.
@@ -245,6 +256,7 @@ func cmdCreate(args []string) int {
 	hwSubtrees := fs.String("hw-subtrees", "", "stock mode: comma-separated non-device subtrees to mirror verbatim from -source-root (e.g. hardware/google/gchips,hardware/google/graphics)")
 	factoryImagesRoot := fs.String("factory-images-root", "", "stock mode: parent dir of per-device factory-image extraction dirs (<root>/<device>/...) to wire as vendor/google_devices/<device>/ blobs")
 	release := fs.String("release", "", "stock mode: target release config (the lunch's middle token, e.g. cp2a); with -factory-images-root, assembles the kernel prebuilt dir RELEASE_KERNEL_<DEVICE>_DIR names")
+	noVerify := fs.Bool("no-verify", false, "stock mode: skip the structural verification create -stock runs on the tree it produced (verify-seed does the same)")
 	bundleDir := fs.String("bundle-dir", "", "bundle content from this directory (verified against the embedded manifest) instead of the binary/cache; also $SLS_BUNDLE_DIR")
 	bundleURL := fs.String("bundle-url", "", "fetch the bundle archive (.tar.gz from `bundle export`) into the cache when the binary carries none (-tags nobundle); also $SLS_BUNDLE_URL")
 	_ = fs.Parse(args)
@@ -258,6 +270,7 @@ func cmdCreate(args []string) int {
 		return cmdCreateStock(stockArgs{
 			out: *out, sourceRoot: *sourceRoot, devices: *devices,
 			kernelVersion: *kernelVersion, hwSubtrees: *hwSubtrees, factoryImagesRoot: *factoryImagesRoot, release: *release,
+			noVerify: *noVerify,
 		})
 	}
 

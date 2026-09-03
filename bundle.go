@@ -30,6 +30,7 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -53,17 +54,20 @@ import (
 // so `go build -tags nobundle` (~5MB) plus one published archive per bundle id replaces the
 // ~510MB binary for distribution and CI.
 
+// ONE generator emits every manifest below (content, exec bits, symlinks, empty dirs), because
+// each loss embed inflicts was found the same expensive way — a build failing far from the cause
+// — and fixed one at a time, so a new KIND of loss had nothing regenerating it. `bundle audit`
+// proves the set complete against a real source tree.
+//
 //go:generate go run ./cmd/bundlemanifest
 //go:embed assets/aosp15_device.sha256
 var embeddedBundleManifest string
 
 // embed.FS carries file contents only: every embedded file stats as 0444, so the executable bit
 // AOSP's scripts rely on (kati runs device/google/tangorpro/uwb/country_conf_gen.sh via $(shell)
-// and errors "Permission denied" at 0644) has to travel separately. cmd/execmanifest regenerates
-// this list from the on-disk assets tree; materializeEmbedded writes listed paths as 0755, and
-// exportBundle records them as 0755 in the archive.
+// and errors "Permission denied" at 0644) has to travel separately. materializeEmbedded writes
+// listed paths as 0755, and exportBundle records them as 0755 in the archive.
 //
-//go:generate go run ./cmd/execmanifest
 //go:embed assets/aosp15_device.exec
 var embeddedExecManifest string
 
@@ -85,11 +89,9 @@ var embeddedExecutables = func() map[string]bool {
 // include/displaycolor/displaycolor_gs101.h -> ../gs101/displaycolor/displaycolor_gs101.h is how
 // its own displaycolor_zuma.h resolves that include against the module's include_dirs. Losing it
 // costs nothing until something compiles libacryl, then fails with "file not found" 46 minutes
-// into a build (husky, 2026-09-03, run 083328Z). cmd/symlinkmanifest regenerates this list;
-// materializeEmbedded recreates each link (copying the target's bytes when the filesystem
-// refuses a symlink).
+// into a build (husky, 2026-09-03, run 083328Z). materializeEmbedded recreates each link
+// (copying the target's bytes when the filesystem refuses a symlink).
 //
-//go:generate go run ./cmd/symlinkmanifest
 //go:embed assets/aosp15_device.symlinks
 var embeddedSymlinkManifest string
 
@@ -112,6 +114,42 @@ func parseSymlinkManifest(text string) []bundleSymlink {
 }
 
 var bundleSymlinks = parseSymlinkManifest(embeddedSymlinkManifest)
+
+// A directory holding no files at any depth is the third thing embed cannot carry: embed.FS is a
+// set of files, so a directory that exists in order to be empty simply does not appear. The
+// bundle has none today (measured 2026-09-03, across both source tags) — this manifest exists so
+// that a future release which adds one does not lose it silently, and so `bundle audit` has
+// something to compare against.
+//
+//go:embed assets/aosp15_device.dirs
+var embeddedDirManifest string
+
+// parseListManifest reads one path per line (comments and blanks skipped).
+func parseListManifest(text string) []string {
+	var out []string
+	for _, line := range strings.Split(text, "\n") {
+		line = strings.TrimSpace(line)
+		if line == "" || strings.HasPrefix(line, "#") {
+			continue
+		}
+		out = append(out, line)
+	}
+	return out
+}
+
+var bundleEmptyDirs = parseListManifest(embeddedDirManifest)
+
+// pathsUnder returns the entries of a path list that lie inside relPath.
+func pathsUnder(list []string, relPath string) []string {
+	relPath = strings.Trim(relPath, "/")
+	var out []string
+	for _, p := range list {
+		if p == relPath || strings.HasPrefix(p, relPath+"/") {
+			out = append(out, p)
+		}
+	}
+	return out
+}
 
 // symlinksUnder returns the manifest entries whose link path is inside relPath.
 func symlinksUnder(relPath string) []bundleSymlink {
@@ -453,6 +491,11 @@ func extractBundleArchive(r io.Reader, dir string) error {
 func exportBundle(entries []bundleEntry, src fs.FS, w io.Writer) error {
 	gz := gzip.NewWriter(w)
 	tw := tar.NewWriter(gz)
+	for _, d := range bundleEmptyDirs {
+		if err := tw.WriteHeader(&tar.Header{Name: d + "/", Mode: 0o755, Typeflag: tar.TypeDir}); err != nil {
+			return err
+		}
+	}
 	for _, l := range bundleSymlinks {
 		if err := tw.WriteHeader(&tar.Header{Name: l.Path, Mode: 0o777, Typeflag: tar.TypeSymlink, Linkname: l.Target}); err != nil {
 			return err
@@ -532,6 +575,12 @@ func materializeEmbedded(relPath, outRoot string) (copied int, err error) {
 	if walkErr != nil {
 		return copied, walkErr
 	}
+	// The empty directories embed dropped: created before the links, which may point into them.
+	for _, d := range pathsUnder(bundleEmptyDirs, relPath) {
+		if err := os.MkdirAll(filepath.Join(outRoot, filepath.FromSlash(d)), 0o755); err != nil {
+			return copied, err
+		}
+	}
 	// The symlinks embed dropped (see embeddedSymlinkManifest), after the files they point at.
 	for _, l := range symlinksUnder(relPath) {
 		made, serr := materializeSymlink(outRoot, l)
@@ -545,24 +594,143 @@ func materializeEmbedded(relPath, outRoot string) (copied int, err error) {
 	return copied, nil
 }
 
-// cmdBundle: info | verify [-dir] | export -out <dir>.
+// sliceFlag collects a repeatable string flag.
+type sliceFlag []string
+
+func (s *sliceFlag) String() string     { return strings.Join(*s, ",") }
+func (s *sliceFlag) Set(v string) error { *s = append(*s, v); return nil }
+
+// verifyBundleExtras checks a materialized bundle directory for what the content manifest cannot
+// express: executable bits, symlinks (and their targets) and empty directories.
+func verifyBundleExtras(dir string) []string {
+	var problems []string
+	for p := range embeddedExecutables {
+		fi, err := os.Stat(filepath.Join(dir, filepath.FromSlash(p)))
+		if err != nil {
+			problems = append(problems, "missing executable: "+p)
+		} else if fi.Mode()&0o111 == 0 {
+			problems = append(problems, "not executable: "+p)
+		}
+	}
+	for _, l := range bundleSymlinks {
+		full := filepath.Join(dir, filepath.FromSlash(l.Path))
+		target, err := os.Readlink(full)
+		if err != nil {
+			if _, serr := os.Stat(full); serr == nil {
+				continue // materialized as a copy: a filesystem that refuses symlinks
+			}
+			problems = append(problems, "missing symlink: "+l.Path)
+			continue
+		}
+		if filepath.ToSlash(target) != l.Target {
+			problems = append(problems, "symlink "+l.Path+" -> "+filepath.ToSlash(target)+", want "+l.Target)
+		}
+	}
+	for _, d := range bundleEmptyDirs {
+		if fi, err := os.Stat(filepath.Join(dir, filepath.FromSlash(d))); err != nil || !fi.IsDir() {
+			problems = append(problems, "missing directory: "+d)
+		}
+	}
+	sort.Strings(problems)
+	return problems
+}
+
+// cmdBundle: info | verify [-dir] | export -out <dir> | audit -source <tree>.
 func cmdBundle(args []string) int {
 	if len(args) == 0 {
-		fmt.Fprintln(os.Stderr, "bundle: info | verify [-dir <dir>] | export -out <dir>")
+		fmt.Fprintln(os.Stderr, "bundle: info | verify [-dir <dir>] | export -out <dir> | audit -source <aosp tree>")
 		return 2
 	}
 	sub, rest := args[0], args[1:]
 	fs := flag.NewFlagSet("bundle "+sub, flag.ExitOnError)
 	dir := fs.String("dir", "", "verify: a bundle directory instead of the active source")
 	out := fs.String("out", "", "export: directory to write sls-bundle-<id>.tar.gz and .sha256 into")
+	var sources sliceFlag
+	fs.Var(&sources, "source", "audit: an AOSP tree the bundle was cut from (repeatable — the bundle spans android-15.0.0_r36 and, for tegu, r31)")
+	allowUnaudited := fs.Bool("allow-unaudited", false, "audit: succeed when some directories have no -source tree to compare against (they are still listed)")
 	_ = fs.Parse(rest)
 	var total int64
 	for _, e := range bundleEntries {
 		total += e.Size
 	}
 	switch sub {
+	case "audit":
+		if len(sources) == 0 {
+			fmt.Fprintln(os.Stderr, "bundle audit: -source <aosp tree> is required (repeatable; see assets/aosp15_device.sources for which tag each directory came from)")
+			return 2
+		}
+		tops := bundleTopDirs()
+		covered := map[string]bool{}
+		rc := 0
+		for _, src := range sources {
+			res, err := auditBundleAgainstSource(src, tops)
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "bundle audit: %s: %v\n", src, err)
+				return 1
+			}
+			for _, d := range res.Audited {
+				covered[d] = true
+			}
+			fmt.Printf("bundle audit %s\n  %d directories, %d entries compared, %d excluded by design\n",
+				src, len(res.Audited), res.Checked, res.Excluded)
+			if len(res.Findings) == 0 {
+				fmt.Println("  OK — content, executable bits, symlinks and empty directories all match")
+				continue
+			}
+			rc = 1
+			byClass := map[string]int{}
+			for _, f := range res.Findings {
+				byClass[f.Class]++
+			}
+			var classes []string
+			for c := range byClass {
+				classes = append(classes, c)
+			}
+			sort.Strings(classes)
+			for _, c := range classes {
+				fmt.Printf("  %s: %d\n", c, byClass[c])
+			}
+			for i, f := range res.Findings {
+				if i == 40 {
+					fmt.Printf("  ... and %d more\n", len(res.Findings)-40)
+					break
+				}
+				fmt.Printf("    [%s] %s — %s\n", f.Class, f.Path, f.Note)
+			}
+		}
+		var unaudited []string
+		for _, d := range tops {
+			if !covered[d] {
+				unaudited = append(unaudited, d)
+			}
+		}
+		diverged := rc != 0
+		if len(unaudited) > 0 {
+			fmt.Printf("  ! %d of %d directories were not audited — no -source tree carries them: %s\n",
+				len(unaudited), len(tops), strings.Join(unaudited, " "))
+			for _, d := range unaudited {
+				if tag := bundleSourceTag(d); tag != "" {
+					fmt.Printf("      %s came from %s\n", d, tag)
+				}
+			}
+			fmt.Println("    Pass that tree with another -source, or -allow-unaudited to accept partial coverage.")
+			if !*allowUnaudited {
+				rc = 1
+			}
+		}
+		switch {
+		case diverged:
+			fmt.Println("VERDICT: DIVERGENCE — regenerate with `go generate ./...` if the source moved, or investigate the findings above")
+		case len(unaudited) == 0:
+			fmt.Printf("VERDICT: faithful — all %d directories match their source across every property go:embed can lose\n", len(covered))
+		default:
+			fmt.Printf("VERDICT: no divergence in the %d directories audited; %d unaudited (source tree not provided)\n", len(covered), len(unaudited))
+		}
+		return rc
 	case "info":
-		fmt.Printf("bundle id %s: %d files, %d MB; source: %s; cache: %s\n", bundleID(), len(bundleEntries), total/1e6, bundleSource, filepath.Join(defaultBundleCache(), bundleID()))
+		fmt.Printf("bundle id %s: %d files (%d MB), %d executable, %d symlinks, %d empty dirs; source: %s; cache: %s\n",
+			bundleID(), len(bundleEntries), total/1e6, len(embeddedExecutables), len(bundleSymlinks), len(bundleEmptyDirs),
+			bundleSource, filepath.Join(defaultBundleCache(), bundleID()))
 		return 0
 	case "verify":
 		src := embeddedFS
@@ -578,6 +746,19 @@ func cmdBundle(args []string) int {
 			return 1
 		}
 		fmt.Printf("bundle verify: OK — %d files match manifest %s\n", n, bundleID())
+		// A directory bundle can also be checked for the properties embed drops; an embedded
+		// bundle carries them in the manifests by construction.
+		if *dir != "" {
+			if problems := verifyBundleExtras(*dir); len(problems) > 0 {
+				for _, p := range problems {
+					fmt.Fprintln(os.Stderr, "  "+p)
+				}
+				fmt.Fprintf(os.Stderr, "bundle verify: FAILED — %d executable/symlink/directory mismatches\n", len(problems))
+				return 1
+			}
+			fmt.Printf("  + %d executable bits, %d symlinks, %d empty directories all present\n",
+				len(embeddedExecutables), len(bundleSymlinks), len(bundleEmptyDirs))
+		}
 		if *dir != "" {
 			_ = os.WriteFile(filepath.Join(*dir, stampName(bundleID())), []byte(time.Now().UTC().Format(time.RFC3339)+"\n"), 0o644)
 		}

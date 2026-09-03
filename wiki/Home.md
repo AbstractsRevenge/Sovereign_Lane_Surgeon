@@ -42,6 +42,8 @@ On 2026-09-03 a Pixel 7 Pro booted an android-17 image seeded, built and flashed
 
 ## What is actually proven
 
+[![CI](https://github.com/AbstractsRevenge/sovereign_lane_surgeon/actions/workflows/ci.yml/badge.svg)](https://github.com/AbstractsRevenge/sovereign_lane_surgeon/actions/workflows/ci.yml)
+
 Claims here are separated by evidence, not by confidence.
 
 | Claim | Evidence |
@@ -61,6 +63,7 @@ not the same as a phone that boots, and only gs201 has crossed it.
 - **[[Verification]]** — what `verify-seed`, `preflight` and `bundle audit` each prove
 - **[[Device Support]]** — which devices, and what adding one costs
 - **[[Troubleshooting]]** — every real failure this port hit, and what it meant
+- **[[Evidence]]** — the artifacts behind the claims above, and continuous integration
 
 Current state, per device and per run, lives in
 [CURRENT_STATE.md](https://github.com/AbstractsRevenge/sovereign_lane_surgeon/blob/main/CURRENT_STATE.md)

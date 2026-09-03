@@ -1,0 +1,77 @@
+# Copyright 2026 The Android Open Source Project
+# Copyright 2026 Sovereign Lane Surgeon
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#      http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+# CI exists so the results are verifiable by someone who is not the author. A test count in a
+# README is a claim; a run on every push is evidence. Three things are proven here that no
+# assertion in prose can be: the committed bundle matches its committed manifests, a real device
+# seed works end to end from that bundle, and the slim (-tags nobundle) build still compiles.
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          # The go directive in go.mod is a minimum, not a pin; CI runs what the author runs.
+          go-version: stable
+          cache: true
+
+      - name: gofmt
+        run: |
+          unformatted="$(gofmt -l . | grep -v '^internal/blueprint/' || true)"
+          if [ -n "$unformatted" ]; then
+            echo "not gofmt'd:"; echo "$unformatted"; exit 1
+          fi
+
+      - name: go vet
+        run: go vet ./...
+
+      - name: Build (bundle embedded)
+        run: go build -o sovereign-lane-surgeon .
+
+      - name: Build (-tags nobundle, the slim binary)
+        run: go build -tags nobundle -o sovereign-lane-surgeon-slim .
+
+      - name: Binary sizes
+        run: ls -la --block-size=M sovereign-lane-surgeon sovereign-lane-surgeon-slim | awk '{print $5, $9}'
+
+      - name: Bundle self-consistency
+        # Every committed file hashed against the committed manifest: proves the bundle in git is
+        # exactly what the manifests describe, which is what every seed depends on.
+        run: |
+          ./sovereign-lane-surgeon bundle info
+          ./sovereign-lane-surgeon bundle verify
+
+      - name: Tests
+        # Includes an end-to-end seed of a real device family from the embedded bundle into a
+        # temporary tree, plus the licence and documentation consistency tests.
+        run: go test -v ./... 2>&1 | tail -80
+
+      - name: Test summary
+        if: always()
+        run: |
+          total=$(go test -v ./ 2>&1 | grep -c '^=== RUN' || true)
+          echo "### $total tests" >> "$GITHUB_STEP_SUMMARY"
+          go test ./... 2>&1 | sed 's/^/    /' >> "$GITHUB_STEP_SUMMARY"

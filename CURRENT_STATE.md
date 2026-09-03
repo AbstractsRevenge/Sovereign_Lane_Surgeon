@@ -80,7 +80,7 @@ The Sovereign Lane Surgeon is a self-contained Go toolkit for creating parallel 
 | AST operations | ✅ Working | Blueprint/Go AST patching (no regex): rename, drop-dep, requalify, cflag drop, AIDL re-pin, defaults pinning, header_libs add |
 | Uninstall/rollback | ✅ Working | Byte-identical reversal |
 | Audit/classification | ✅ Working | 23-class taxonomy incl. the android-17 classes (illegal cflag, AIDL version conflict, system-props artifact path, neverallow violation, stale generated mk, kernel module rule collision) |
-| Test suite | ✅ Working | 139 tests, all passing (`go test ./...`), including an **end-to-end seed** from the embedded bundle into a temp root (and, with `SLS_TEST_FACTORY_ROOT` set, the full vendor-blob pipeline); `docs_test.go` fails the suite when README/CURRENT_STATE drift from the code |
+| Test suite | ✅ Working | run on every push by CI (badge in README); 142 tests (`go test ./...`), including an **end-to-end seed** from the embedded bundle into a temp root (and, with `SLS_TEST_FACTORY_ROOT` set, the full vendor-blob pipeline); `docs_test.go` fails the suite when README/CURRENT_STATE drift from the code |
 
 ### Device Revival (`create -stock`)
 | Component | Status | Details |

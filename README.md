@@ -17,6 +17,9 @@ limitations under the License.
 
 # sovereign-lane-surgeon
 
+[![CI](https://github.com/AbstractsRevenge/sovereign_lane_surgeon/actions/workflows/ci.yml/badge.svg)](https://github.com/AbstractsRevenge/sovereign_lane_surgeon/actions/workflows/ci.yml)
+
+
 **Seed a sovereign customization "lane" into an Android (AOSP) source tree — a parallel, first-class product variant that builds like stock, without overlays and without forking the whole tree.**
 
 A single self-contained Go binary. Zero external dependencies. `go build` and run.

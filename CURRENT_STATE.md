@@ -23,7 +23,7 @@ rango, stallion have CP2A factory images but no tree in any tag — out of reach
 | raven | raviole / gs101 | r36 | CP2A.260705.006.A1 | ✅ | ✅ 123025Z | ⏳ | — |
 | bluejay | bluejay / gs101 | r36 | CP2A.260705.006.A1 | ✅ | ✅ 123425Z | ⏳ | — |
 | shiba | shusky / zuma | r36 | CP2A.260805.005 | ✅ | ✅ 124842Z | ⏳ | — |
-| husky | shusky / zuma | r36 | CP2A.260805.005 | ✅ | ✅ 125137Z | ⏳ running (-j20, one per SoC family) | — |
+| husky | shusky / zuma | r36 | CP2A.260805.005 | ✅ | ✅ 125137Z | ⏳ rebuilding (083328Z failed on the dropped zuma displaycolor symlink — bundle fixed) | — |
 | akita | akita / zuma | r36 | CP2A.260805.005 | ✅ | ✅ 125430Z | ⏳ | — |
 | tokay | caimito / zumapro | r36 | CP2A.260805.005.A1 | ✅ | ✅ 123822Z | ⏳ | — |
 | caiman | caimito / zumapro | r36 | CP2A.260805.005.A1 | ✅ | ✅ 124121Z | ⏳ | — |
@@ -62,6 +62,7 @@ The Sovereign Lane Surgeon is a self-contained Go toolkit for creating parallel 
 ### Device Revival (`create -stock`)
 | Component | Status | Details |
 |-----------|--------|---------|
+| Bundle fidelity | ✅ Working | embed.FS drops exec bits AND symlinks; both travel as generated manifests (`.exec`, `.symlinks`) — the symlink loss cost a 46-minute husky build before it was found |
 | Embedded device trees | ✅ Working | every cp2a family with an AOSP tree: raviole, bluejay, pantah, lynx, tangorpro, felix, shusky, akita, caimito, comet (r36) + tegu (r31); SoC dirs gs101/gs201/zuma/zumapro; provenance in `assets/aosp15_device.sources` |
 | Embedded hardware HALs | ✅ Working | gchips, graphics (with the Soong-conversion overlay for graphics/common), pixel, pixel-sepolicy; per-family kernel headers |
 | Reference closure | ✅ Working | every device/google + hardware/google subtree the family references is mirrored transitively; upstream git projects left alone |

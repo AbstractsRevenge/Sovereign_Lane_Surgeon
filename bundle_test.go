@@ -127,3 +127,84 @@ func TestParseBundleManifest(t *testing.T) {
 		t.Fatalf("%+v", got)
 	}
 }
+
+// go:embed drops symlinks; the manifest is how they survive. Every entry must name a link that
+// still exists in the checked-out assets tree, and materializeEmbedded must recreate it.
+func TestSymlinkManifestMatchesAssets(t *testing.T) {
+	if len(bundleSymlinks) == 0 {
+		t.Fatal("symlink manifest is empty — run go generate")
+	}
+	for _, l := range bundleSymlinks {
+		got, err := os.Readlink(filepath.Join("assets/aosp15_device", filepath.FromSlash(l.Path)))
+		if err != nil {
+			t.Errorf("%s: not a symlink in the assets tree: %v", l.Path, err)
+			continue
+		}
+		if filepath.ToSlash(got) != l.Target {
+			t.Errorf("%s: manifest says -> %s, assets say -> %s", l.Path, l.Target, got)
+		}
+	}
+	// The one that broke husky, and its zumapro twin.
+	for _, want := range []string{
+		"hardware/google/graphics/zuma/include/displaycolor/displaycolor_gs101.h",
+		"hardware/google/graphics/zumapro/include/displaycolor/displaycolor_gs101.h",
+	} {
+		found := false
+		for _, l := range bundleSymlinks {
+			if l.Path == want {
+				found = true
+			}
+		}
+		if !found {
+			t.Errorf("manifest lost %s", want)
+		}
+	}
+}
+
+func TestSymlinksUnderAndMaterialize(t *testing.T) {
+	if got := symlinksUnder("hardware/google/graphics/zuma"); len(got) != 1 || got[0].Target != "../gs101/displaycolor/displaycolor_gs101.h" {
+		t.Fatalf("%+v", got)
+	}
+	if got := symlinksUnder("device/google/pantah"); len(got) != 0 {
+		t.Errorf("unexpected: %+v", got)
+	}
+	root := t.TempDir()
+	l := bundleSymlink{Path: "hardware/google/graphics/zuma/include/displaycolor/displaycolor_gs101.h", Target: "../gs101/displaycolor/displaycolor_gs101.h"}
+	if err := os.MkdirAll(filepath.Join(root, "hardware/google/graphics/zuma/include/gs101/displaycolor"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(root, "hardware/google/graphics/zuma/include/gs101/displaycolor/displaycolor_gs101.h"), []byte("#pragma once\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	made, err := materializeSymlink(root, l)
+	if err != nil || !made {
+		t.Fatalf("made=%v err=%v", made, err)
+	}
+	// the include the compiler performs must now resolve
+	b, err := os.ReadFile(filepath.Join(root, filepath.FromSlash(l.Path)))
+	if err != nil || string(b) != "#pragma once\n" {
+		t.Fatalf("link does not resolve: %v %q", err, b)
+	}
+	// idempotent
+	if made, err := materializeSymlink(root, l); made || err != nil {
+		t.Fatalf("second call: made=%v err=%v", made, err)
+	}
+}
+
+// A real bundle materialization carries the link with the files.
+func TestMaterializeEmbeddedRestoresSymlinks(t *testing.T) {
+	if !bundleAvailable() {
+		t.Skip("nobundle")
+	}
+	root := t.TempDir()
+	if _, err := materializeEmbedded("hardware/google/graphics/zuma", root); err != nil {
+		t.Fatal(err)
+	}
+	p := filepath.Join(root, "hardware/google/graphics/zuma/include/displaycolor/displaycolor_gs101.h")
+	if _, err := os.Lstat(p); err != nil {
+		t.Fatalf("symlink not restored: %v", err)
+	}
+	if _, err := os.ReadFile(p); err != nil {
+		t.Fatalf("restored link does not resolve: %v", err)
+	}
+}

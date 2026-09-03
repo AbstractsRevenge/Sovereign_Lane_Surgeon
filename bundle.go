@@ -80,6 +80,76 @@ var embeddedExecutables = func() map[string]bool {
 	return set
 }()
 
+// go:embed also drops SYMLINKS entirely (embed.FS cannot represent one; the walk does not even
+// yield them). AOSP's trees use them as compatibility headers — zuma's
+// include/displaycolor/displaycolor_gs101.h -> ../gs101/displaycolor/displaycolor_gs101.h is how
+// its own displaycolor_zuma.h resolves that include against the module's include_dirs. Losing it
+// costs nothing until something compiles libacryl, then fails with "file not found" 46 minutes
+// into a build (husky, 2026-09-03, run 083328Z). cmd/symlinkmanifest regenerates this list;
+// materializeEmbedded recreates each link (copying the target's bytes when the filesystem
+// refuses a symlink).
+//
+//go:generate go run ./cmd/symlinkmanifest
+//go:embed assets/aosp15_device.symlinks
+var embeddedSymlinkManifest string
+
+type bundleSymlink struct{ Path, Target string }
+
+// parseSymlinkManifest reads "<link path>\t<link target>" lines (comments and blanks skipped).
+func parseSymlinkManifest(text string) []bundleSymlink {
+	var out []bundleSymlink
+	for _, line := range strings.Split(text, "\n") {
+		if strings.TrimSpace(line) == "" || strings.HasPrefix(line, "#") {
+			continue
+		}
+		f := strings.SplitN(line, "\t", 2)
+		if len(f) != 2 || f[0] == "" || f[1] == "" {
+			continue
+		}
+		out = append(out, bundleSymlink{Path: f[0], Target: f[1]})
+	}
+	return out
+}
+
+var bundleSymlinks = parseSymlinkManifest(embeddedSymlinkManifest)
+
+// symlinksUnder returns the manifest entries whose link path is inside relPath.
+func symlinksUnder(relPath string) []bundleSymlink {
+	relPath = strings.Trim(relPath, "/")
+	var out []bundleSymlink
+	for _, l := range bundleSymlinks {
+		if l.Path == relPath || strings.HasPrefix(l.Path, relPath+"/") {
+			out = append(out, l)
+		}
+	}
+	return out
+}
+
+// materializeSymlink recreates one bundle symlink under outRoot. No-clobber. A filesystem that
+// refuses symlinks gets the target's bytes copied instead, when the target is inside the tree —
+// the include still resolves, which is the point.
+func materializeSymlink(outRoot string, l bundleSymlink) (bool, error) {
+	dst := filepath.Join(outRoot, filepath.FromSlash(l.Path))
+	if _, err := os.Lstat(dst); err == nil {
+		return false, nil // no-clobber, symlink or real file
+	}
+	if err := os.MkdirAll(filepath.Dir(dst), 0o755); err != nil {
+		return false, err
+	}
+	if err := os.Symlink(filepath.FromSlash(l.Target), dst); err == nil {
+		return true, nil
+	}
+	src := filepath.Join(filepath.Dir(dst), filepath.FromSlash(l.Target))
+	b, rerr := os.ReadFile(src)
+	if rerr != nil {
+		return false, fmt.Errorf("symlink %s -> %s: %w", l.Path, l.Target, rerr)
+	}
+	if werr := os.WriteFile(dst, b, 0o644); werr != nil {
+		return false, werr
+	}
+	return true, nil
+}
+
 // Provenance of every top-level bundle directory: one line per directory, "<path> <AOSP tag>".
 // Everything is android-15.0.0_r36 except tegu (Pixel 9a), whose tree exists only under
 // android-15.0.0_r31; cross-tag reconciliations live in assets/reconcile (reconcile.go).
@@ -345,6 +415,18 @@ func extractBundleArchive(r io.Reader, dir string) error {
 			if err := os.MkdirAll(target, 0o755); err != nil {
 				return err
 			}
+		case tar.TypeSymlink:
+			if err := os.MkdirAll(filepath.Dir(target), 0o755); err != nil {
+				return err
+			}
+			link := filepath.Clean(h.Linkname)
+			if filepath.IsAbs(link) || strings.HasPrefix(filepath.ToSlash(link), "../../../") {
+				continue // never point outside the extraction root
+			}
+			_ = os.Remove(target)
+			if err := os.Symlink(h.Linkname, target); err != nil {
+				return err
+			}
 		case tar.TypeReg:
 			if err := os.MkdirAll(filepath.Dir(target), 0o755); err != nil {
 				return err
@@ -366,10 +448,16 @@ func extractBundleArchive(r io.Reader, dir string) error {
 	}
 }
 
-// exportBundle writes entries from src as a .tar.gz (executables per the exec manifest).
+// exportBundle writes entries from src as a .tar.gz (executables per the exec manifest, plus the
+// symlinks embed dropped, as real tar symlink entries).
 func exportBundle(entries []bundleEntry, src fs.FS, w io.Writer) error {
 	gz := gzip.NewWriter(w)
 	tw := tar.NewWriter(gz)
+	for _, l := range bundleSymlinks {
+		if err := tw.WriteHeader(&tar.Header{Name: l.Path, Mode: 0o777, Typeflag: tar.TypeSymlink, Linkname: l.Target}); err != nil {
+			return err
+		}
+	}
 	for _, e := range entries {
 		b, err := fs.ReadFile(src, e.Path)
 		if err != nil {
@@ -441,7 +529,20 @@ func materializeEmbedded(relPath, outRoot string) (copied int, err error) {
 		copied++
 		return nil
 	})
-	return copied, walkErr
+	if walkErr != nil {
+		return copied, walkErr
+	}
+	// The symlinks embed dropped (see embeddedSymlinkManifest), after the files they point at.
+	for _, l := range symlinksUnder(relPath) {
+		made, serr := materializeSymlink(outRoot, l)
+		if serr != nil {
+			return copied, serr
+		}
+		if made {
+			copied++
+		}
+	}
+	return copied, nil
 }
 
 // cmdBundle: info | verify [-dir] | export -out <dir>.

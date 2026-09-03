@@ -23,7 +23,7 @@ rango, stallion have CP2A factory images but no tree in any tag — out of reach
 | raven | raviole / gs101 | r36 | CP2A.260705.006.A1 | ✅ | ✅ 123025Z | ⏳ | — |
 | bluejay | bluejay / gs101 | r36 | CP2A.260705.006.A1 | ✅ | ✅ 123425Z | ⏳ | — |
 | shiba | shusky / zuma | r36 | CP2A.260805.005 | ✅ | ✅ 124842Z | ⏳ | — |
-| husky | shusky / zuma | r36 | CP2A.260805.005 | ✅ | ✅ 125137Z | ⏳ rebuilding (083328Z failed on the dropped zuma displaycolor symlink — bundle fixed) | — |
+| husky | shusky / zuma | r36 | CP2A.260805.005 | ✅ | ✅ 125137Z | ⏳ rebuilding (083328Z: dropped symlink → bundle fix; 092940Z: zuma neverallow → op-8 row via compat-propose) | — |
 | akita | akita / zuma | r36 | CP2A.260805.005 | ✅ | ✅ 125430Z | ⏳ | — |
 | tokay | caimito / zumapro | r36 | CP2A.260805.005.A1 | ✅ | ✅ 123822Z | ⏳ | — |
 | caiman | caimito / zumapro | r36 | CP2A.260805.005.A1 | ✅ | ✅ 124121Z | ⏳ | — |

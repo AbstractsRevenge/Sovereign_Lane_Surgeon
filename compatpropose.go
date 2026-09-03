@@ -49,8 +49,16 @@ var (
 	hdrNotFoundRe = regexp.MustCompile(`fatal error: '([^']+)' file not found`)
 	// aprotoc: Option "(android.os.statsd.module)" unknown
 	protoOptRe = regexp.MustCompile(`Option "\(([A-Za-z0-9_.]+)\.([A-Za-z0-9_]+)\)" unknown`)
-	// secilc: neverallow on line 488 of system/sepolicy/private/dumpstate.te (or line 45678 of policy.conf) violated by allow dumpstate vold:binder { call };
+	// checkpolicy: neverallow on line 488 of system/sepolicy/private/dumpstate.te (or line 45678 of policy.conf) violated by allow dumpstate vold:binder { call };
 	neverallowRe = regexp.MustCompile(`neverallow on line (\d+) of ([^ ]+) \(or line \d+ of [^)]+\) violated by (allow [^;]+;)`)
+	// secilc, CIL form — names BOTH source files and lines, which is better evidence than a tree search:
+	//   neverallow check failed at …/plat_sepolicy.cil:27240 from system/sepolicy/private/domain.te:2273
+	//     (neverallow base_typeattr_248 base_typeattr_542 (binder (impersonate call set_context_mgr transfer)))
+	//       <root>
+	//       allow at …/vendor_sepolicy.cil:10260 from device/google/zuma-sepolicy/radio/hal_radioext_default.te:28 from …
+	//         (allow hal_radioext_default gril_antenna_tuning_service (binder (call transfer)))
+	cilNeverallowRe = regexp.MustCompile(`neverallow check failed at \S+ from (\S+?):(\d+)`)
+	cilAllowFromRe  = regexp.MustCompile(`allow at \S+ from (\S+?):(\d+)`)
 	// FAILED: … .intermediates/<dir>/<module>/<variant>/…
 	intermediatesRe = regexp.MustCompile(`\.intermediates/((?:[A-Za-z0-9_.+-]+/)+)([A-Za-z0-9_.+-]+)/[A-Za-z0-9_.+-]*android[A-Za-z0-9_.+-]*/`)
 )
@@ -379,6 +387,51 @@ func proposeNeverallows(outRoot string, lines []string) []compatProposal {
 	return out
 }
 
+// proposeNeverallowsCIL reads secilc's CIL-form report: each "neverallow check failed … from
+// <platform .te>:<line>" is followed by the "allow at … from <mirrored .te>:<line>" that violates
+// it. Both statements are then read from those exact lines — no searching, and the mirrored file
+// is named by the compiler itself. Rows are deduplicated per (file, statement).
+func proposeNeverallowsCIL(outRoot string, lines []string) []compatProposal {
+	var out []compatProposal
+	seen := map[string]bool{}
+	platFile, platLine := "", 0
+	for _, l := range lines {
+		if m := cilNeverallowRe.FindStringSubmatch(l); m != nil {
+			platFile = m[1]
+			platLine, _ = strconv.Atoi(m[2])
+			continue
+		}
+		m := cilAllowFromRe.FindStringSubmatch(l)
+		if m == nil || platFile == "" {
+			continue
+		}
+		devFile := m[1]
+		devLine, _ := strconv.Atoi(m[2])
+		// Only mirrored device/hardware policy is ours to edit; a platform-to-platform
+		// violation is the target tree's own business.
+		if !strings.HasPrefix(devFile, "device/") && !strings.HasPrefix(devFile, "hardware/") {
+			continue
+		}
+		stmt := fileLine(filepath.Join(outRoot, filepath.FromSlash(devFile)), devLine)
+		head := fileLine(filepath.Join(outRoot, filepath.FromSlash(platFile)), platLine)
+		if stmt == "" || head == "" {
+			out = append(out, compatProposal{Manifest: "assets/sepolicy_neverallow/MANIFEST", Why: fmt.Sprintf("%s:%d violates %s:%d, but one of those lines could not be read", devFile, devLine, platFile, platLine)})
+			continue
+		}
+		key := devFile + "\x00" + stmt
+		if seen[key] {
+			continue
+		}
+		seen[key] = true
+		out = append(out, compatProposal{
+			Manifest: "assets/sepolicy_neverallow/MANIFEST",
+			Row:      strings.Join([]string{devFile, stmt, platFile, head, fmt.Sprintf("proposed: secilc reported %s:%d violating %s:%d", devFile, devLine, platFile, platLine)}, "\t"),
+			Why:      fmt.Sprintf("%s:%d `%s` violates %s:%d `%s`", devFile, devLine, stmt, platFile, platLine, head),
+		})
+	}
+	return out
+}
+
 // proposeCompat runs every detector over the log lines.
 func proposeCompat(outRoot string, lines []string) []compatProposal {
 	var out []compatProposal
@@ -396,6 +449,7 @@ func proposeCompat(outRoot string, lines []string) []compatProposal {
 	out = append(out, proposeHeaderExports(outRoot, lines, idx)...)
 	out = append(out, proposeProtoRenames(outRoot, lines)...)
 	out = append(out, proposeNeverallows(outRoot, lines)...)
+	out = append(out, proposeNeverallowsCIL(outRoot, lines)...)
 	return out
 }
 

@@ -99,3 +99,58 @@ func TestEmbeddedCompatManifestsParse(t *testing.T) {
 		t.Errorf("proto_options.MANIFEST: %+v", renamedProtoOptions)
 	}
 }
+
+// secilc's CIL report names both files and lines; the detector must read the statements from
+// exactly those lines and skip a platform-to-platform violation (not ours to edit).
+func TestProposeNeverallowsCILReadsBothSourceLines(t *testing.T) {
+	root := t.TempDir()
+	write(t, filepath.Join(root, "device/google/zuma-sepolicy/radio/hal_radioext_default.te"),
+		strings.Repeat("# pad\n", 27)+"binder_call(hal_radioext_default, gril_antenna_tuning_service)\n")
+	write(t, filepath.Join(root, "system/sepolicy/private/domain.te"),
+		strings.Repeat("# pad\n", 2272)+"neverallow * { -domain }:binder *;\n")
+	write(t, filepath.Join(root, "system/sepolicy/private/other.te"), strings.Repeat("x\n", 20))
+	log := []string{
+		"neverallow check failed at out/soong/.intermediates/plat_sepolicy.cil:27240 from system/sepolicy/private/domain.te:2273",
+		"  (neverallow base_typeattr_248 base_typeattr_542 (binder (impersonate call set_context_mgr transfer)))",
+		"      <root>",
+		"      allow at out/soong/.intermediates/vendor_sepolicy.cil:10260 from device/google/zuma-sepolicy/radio/hal_radioext_default.te:28 from out/soong/x.cil:1",
+		"        (allow hal_radioext_default gril_antenna_tuning_service (binder (call transfer)))",
+		// the mirrored statement repeats for the reverse-direction rule: one row only
+		"neverallow check failed at out/soong/.intermediates/plat_sepolicy.cil:27235 from system/sepolicy/private/domain.te:2273",
+		"      allow at out/soong/.intermediates/vendor_sepolicy.cil:10263 from device/google/zuma-sepolicy/radio/hal_radioext_default.te:28 from out/soong/x.cil:1",
+		// a platform-only violation must be ignored
+		"neverallow check failed at out/soong/.intermediates/plat_sepolicy.cil:1 from system/sepolicy/private/domain.te:2273",
+		"      allow at out/soong/.intermediates/plat_sepolicy.cil:2 from system/sepolicy/private/other.te:3 from out/soong/x.cil:1",
+	}
+	got := proposeNeverallowsCIL(root, log)
+	if len(got) != 1 {
+		t.Fatalf("want exactly 1 row, got %d: %+v", len(got), got)
+	}
+	want := strings.Join([]string{
+		"device/google/zuma-sepolicy/radio/hal_radioext_default.te",
+		"binder_call(hal_radioext_default, gril_antenna_tuning_service)",
+		"system/sepolicy/private/domain.te",
+		"neverallow * { -domain }:binder *;",
+	}, "\t")
+	if !strings.HasPrefix(got[0].Row, want) {
+		t.Errorf("row:\n got %q\nwant prefix %q", got[0].Row, want)
+	}
+	// and it parses back into the manifest the operation consumes
+	f := strings.Split(got[0].Row, "\t")
+	if len(f) < 5 {
+		t.Fatalf("row has %d fields", len(f))
+	}
+}
+
+// Every manifest row must still name a platform rule and a statement of the shape op 8 drops.
+func TestEmbeddedNeverallowManifestRows(t *testing.T) {
+	rows := embeddedNeverallowDrops()
+	if len(rows) < 6 {
+		t.Fatalf("expected the cheetah, zuma and caimito rows, got %d", len(rows))
+	}
+	for _, r := range rows {
+		if !strings.HasSuffix(r.File, ".te") || r.Statement == "" || r.PlatformFile == "" || r.PlatformLine == "" {
+			t.Errorf("incomplete row: %+v", r)
+		}
+	}
+}

@@ -24,7 +24,7 @@ import (
 	"strings"
 	"text/template"
 
-	parser "github.com/abstractsrevenge/sovereign_lane_surgeon/internal/blueprint/parser"
+	parser "github.com/AbstractsRevenge/sovereign_lane_surgeon/internal/blueprint/parser"
 )
 
 // bpmirror.go — §23.1 step 3 (Phase 3), KEEP-NAME model. Clones user-selected stock subtrees into

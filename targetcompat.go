@@ -28,8 +28,8 @@ import (
 	"strconv"
 	"strings"
 
-	parser "github.com/abstractsrevenge/sovereign_lane_surgeon/internal/blueprint/parser"
-	"github.com/abstractsrevenge/sovereign_lane_surgeon/internal/bpflags"
+	parser "github.com/AbstractsRevenge/sovereign_lane_surgeon/internal/blueprint/parser"
+	"github.com/AbstractsRevenge/sovereign_lane_surgeon/internal/bpflags"
 )
 
 // targetcompat.go — the target-release compatibility pass `create -stock` runs over every subtree

@@ -23,7 +23,7 @@ import (
 	"strings"
 	"text/template"
 
-	parser "github.com/abstractsrevenge/sovereign_lane_surgeon/internal/blueprint/parser"
+	parser "github.com/AbstractsRevenge/sovereign_lane_surgeon/internal/blueprint/parser"
 )
 
 // deviceproduct.go — §23.1 step 5. Generates device/google/<family>-<lane>/ product makefiles

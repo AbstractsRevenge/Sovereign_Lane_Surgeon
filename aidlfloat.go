@@ -23,7 +23,7 @@ import (
 	"strconv"
 	"strings"
 
-	parser "github.com/abstractsrevenge/sovereign_lane_surgeon/internal/blueprint/parser"
+	parser "github.com/AbstractsRevenge/sovereign_lane_surgeon/internal/blueprint/parser"
 )
 
 // aidlfloat.go — target-compat operation 10: a HAL floating on a newer AIDL version than the one

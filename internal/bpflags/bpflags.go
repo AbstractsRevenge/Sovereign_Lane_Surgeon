@@ -23,7 +23,7 @@ package bpflags
 import (
 	"bytes"
 
-	parser "github.com/abstractsrevenge/sovereign_lane_surgeon/internal/blueprint/parser"
+	parser "github.com/AbstractsRevenge/sovereign_lane_surgeon/internal/blueprint/parser"
 )
 
 // Props are the properties whose lists are edited.

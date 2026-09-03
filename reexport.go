@@ -35,7 +35,7 @@ import (
 	"sort"
 	"strings"
 
-	parser "github.com/abstractsrevenge/sovereign_lane_surgeon/internal/blueprint/parser"
+	parser "github.com/AbstractsRevenge/sovereign_lane_surgeon/internal/blueprint/parser"
 )
 
 // cmdReexport is the `reexport` subcommand: auto-generate keep-name re-export stubs for symbols

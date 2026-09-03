@@ -22,7 +22,7 @@ import (
 	"os"
 	"path/filepath"
 
-	parser "github.com/abstractsrevenge/sovereign_lane_surgeon/internal/blueprint/parser"
+	parser "github.com/AbstractsRevenge/sovereign_lane_surgeon/internal/blueprint/parser"
 )
 
 // bpparity.go — structural parity check: for every Android.bp under a mirrored/seeded subtree that

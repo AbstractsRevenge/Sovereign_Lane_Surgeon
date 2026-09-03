@@ -24,7 +24,7 @@ import (
 	"sort"
 	"strings"
 
-	parser "github.com/abstractsrevenge/sovereign_lane_surgeon/internal/blueprint/parser"
+	parser "github.com/AbstractsRevenge/sovereign_lane_surgeon/internal/blueprint/parser"
 )
 
 // seedverify.go — `verify-seed`: does the tree `create -stock` just produced actually satisfy the

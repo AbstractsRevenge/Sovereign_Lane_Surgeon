@@ -55,12 +55,12 @@ func findSelfExtractorDir(outRoot, family, device string) (string, error) {
 // Go/Blueprint source (HARD RULE 3 governs AST-editable source, not reading a shell fragment).
 // Format (confirmed against the real file):
 //
-//	  google_devices)
-//	    TO_EXTRACT="\
-//	            IMAGES/vendor.img \
-//	            RADIO/bootloader.img \
-//	            "
-//	    ;;
+//	google_devices)
+//	  TO_EXTRACT="\
+//	          IMAGES/vendor.img \
+//	          RADIO/bootloader.img \
+//	          "
+//	  ;;
 func parseExtractList(path, caseLabel string) ([]string, error) {
 	b, err := os.ReadFile(path)
 	if err != nil {
@@ -184,12 +184,33 @@ func wireVendorBlobs(outRoot, family, device, factoryDir string) error {
 		}
 	}
 
-	// Glue files: root/{android-info.txt,proprietary/{BoardConfigVendor.mk,device-vendor.mk}} and
+	// android-info.txt comes from the FACTORY image, not the self-extractor: the self-extractor's
+	// copy is whatever AOSP 15 shipped (cheetah: "require version-bootloader=cloudripper-1.0-8428895",
+	// a 2022 bootloader) while the factory image's names the bootloader and baseband the blobs
+	// being wired were built against (CP2A: cloudripper-17.0-15199429, g5300q-260317-260505). A
+	// vendor built for one firmware does not boot on another — observed 2026-09-03 on cheetah:
+	// factory-content super, bootloader 15.2, userspace died and rebooted to the bootloader at ~65 s
+	// with no log, until the July firmware was flashed. fastboot's flashall checks exactly these
+	// lines, so carrying the real ones makes it refuse the mismatch up front.
+	if src := filepath.Join(factoryDir, "android-info.txt"); fileExists(src) {
+		dst := filepath.Join(vendorDir, "android-info.txt")
+		cur, _ := os.ReadFile(dst)
+		stale, _ := os.ReadFile(filepath.Join(sxDir, "root", "android-info.txt"))
+		// Write when absent, or replace a copy that is still the self-extractor's template
+		// (a tree revived before this rule); a hand-edited file is left alone.
+		if cur == nil || (stale != nil && string(cur) == string(stale)) {
+			if cerr := copyFile(src, dst); cerr != nil {
+				return fmt.Errorf("copy android-info.txt: %w", cerr)
+			}
+			fmt.Printf("  + vendor glue: android-info.txt (from the factory image: firmware requirements of these blobs)\n")
+		}
+	}
+
+	// Glue files: root/proprietary/{BoardConfigVendor.mk,device-vendor.mk} and
 	// google_devices/staging/{BoardConfigPartial.mk,device-partial.mk} ALL land flat at
 	// vendor/google_devices/<device>/ (confirmed from the real files' own -include/
 	// inherit-product-if-exists targets — only the binary blobs go under proprietary/).
 	glueSrcs := []string{
-		filepath.Join(sxDir, "root", "android-info.txt"),
 		filepath.Join(sxDir, "root", "proprietary", "BoardConfigVendor.mk"),
 		filepath.Join(sxDir, "root", "proprietary", "device-vendor.mk"),
 		filepath.Join(sxDir, "google_devices", "staging", "BoardConfigPartial.mk"),
@@ -208,5 +229,35 @@ func wireVendorBlobs(outRoot, family, device, factoryDir string) error {
 		}
 		fmt.Printf("  + vendor glue: %s\n", filepath.Base(gs))
 	}
+	// BoardConfigPartial.mk only exports android-info.txt as TARGET_BOARD_INFO_FILE under
+	// USE_ANDROID_INFO (a Google-internal knob: `-include vendor/google/tools/android-info.mk`).
+	// Set it in our copy of BoardConfigVendor.mk so the build's android-info.txt carries the
+	// requirements above.
+	return enableAndroidInfo(filepath.Join(vendorDir, "BoardConfigVendor.mk"))
+}
+
+func fileExists(p string) bool {
+	_, err := os.Stat(p)
+	return err == nil
+}
+
+// enableAndroidInfo prepends `USE_ANDROID_INFO := true` to the vendor BoardConfigVendor.mk when
+// it does not set it yet. Idempotent; a missing file is left alone.
+func enableAndroidInfo(boardConfigVendor string) error {
+	b, err := os.ReadFile(boardConfigVendor)
+	if err != nil {
+		return nil
+	}
+	if strings.Contains(string(b), "USE_ANDROID_INFO") {
+		return nil
+	}
+	head := "# The build's android-info.txt must carry the bootloader/baseband the wired vendor blobs\n" +
+		"# require (see vendor/google_devices/<device>/android-info.txt, taken from the factory image);\n" +
+		"# BoardConfigPartial.mk exports it only under USE_ANDROID_INFO. Set by sovereign-lane-surgeon.\n" +
+		"USE_ANDROID_INFO := true\n\n"
+	if err := os.WriteFile(boardConfigVendor, append([]byte(head), b...), 0o644); err != nil {
+		return err
+	}
+	fmt.Printf("  + vendor glue: USE_ANDROID_INFO := true in %s\n", filepath.Base(boardConfigVendor))
 	return nil
 }

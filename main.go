@@ -86,6 +86,8 @@ func main() {
 		os.Exit(cmdAssembleKernel(args))
 	case "extract-vendor":
 		os.Exit(cmdExtractVendor(args))
+	case "assemble-super":
+		os.Exit(cmdAssembleSuper(args))
 	case "version", "-v", "--version":
 		fmt.Println("sovereign-lane-surgeon", version)
 	case "help", "-h", "--help":
@@ -155,6 +157,12 @@ SUBCOMMANDS:
                                first-stage modules out of vendor_kernel_boot.img, and the vendor_dlkm /
                                system_dlkm module lists. Pure Go (no lz4 tool); refuses a build-id
                                mismatch between the flag and the image. create -stock -release does the same.
+  assemble-super -device <d> -out <root> [-build-out <dir>]
+                               After a full build: pack the prebuilt vendor/vendor_dlkm images android-17's
+                               Soong super leaves out into <PRODUCT_OUT>/super_full.img (the build's own
+                               build_super_image + misc_info), and write flash_<d>.sh with the proven flash
+                               sequence (firmware requirements from the blobs' android-info.txt, vbmeta as
+                               signed, explicit f2fs format of userdata/metadata).
   version
 
 The taxonomy + method are documented in holo_lane_sovereignty_handoff_20260711.md §22.

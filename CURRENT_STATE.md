@@ -15,9 +15,9 @@ rango, stallion have CP2A factory images but no tree in any tag — out of reach
 | device | family / SoC | tree source | factory image | `create -stock` | `m nothing` | full build | flashed |
 |---|---|---|---|---|---|---|---|
 | panther | pantah / gs201 | r36 | CP2A.260705.006 | ✅ replayed from wiped tree | ✅ 120519Z | ✅ 153638Z full_completed | — |
-| cheetah | pantah / gs201 | r36 | CP2A.260705.006 | ✅ | ✅ 120945Z | ✅ 152554Z full_completed (super.img); 10 attempts, each a new compat op or bundle asset: 5 libion header, 6 statsd proto, 7 sepolicy types, kernel-headers, 8 neverallows, 9 -Wno-error, 10 power HAL V6 | ⏳ (device connected, not yet visible on USB) |
+| cheetah | pantah / gs201 | r36 | CP2A.260705.006 | ✅ | ✅ 120945Z | ✅ 152554Z full_completed (super.img); 10 attempts, each a new compat op or bundle asset: 5 libion header, 6 statsd proto, 7 sepolicy types, kernel-headers, 8 neverallows, 9 -Wno-error, 10 power HAL V6 | ⏳ flashed 23:38Z; boot failed ×4 → three flash-method faults found and fixed in the toolkit (super lacked vendor; --disable-verification; -w erases only); 4th: phone firmware (cloudripper-15.2) older than the blobs require (17.0-15199429) — firmware flash with T |
 | lynx | lynx / gs201 | r36 | CP2A.260705.006 | ✅ | ✅ 121328Z | ✅ 171442Z full_completed | — |
-| tangorpro | tangorpro / gs201 | r36 | CP2A.260705.006 | ✅ | ✅ 121701Z | ⏳ | — |
+| tangorpro | tangorpro / gs201 | r36 | CP2A.260705.006 | ✅ | ✅ 121701Z | ✅ 223034Z full_completed (from-scratch after the crash left corrupt intermediates) | — |
 | felix | felix / gs201 | r36 | CP2A.260705.006 | ✅ | ✅ 122559Z | ⏳ | — |
 | oriole | raviole / gs101 | r36 | CP2A.260705.006.A1 | ✅ (kernel from vendor_boot.img) | ✅ 124446Z | ⏳ | — |
 | raven | raviole / gs101 | r36 | CP2A.260705.006.A1 | ✅ | ✅ 123025Z | ⏳ | — |
@@ -57,7 +57,7 @@ The Sovereign Lane Surgeon is a self-contained Go toolkit for creating parallel 
 | AST operations | ✅ Working | Blueprint/Go AST patching (no regex) |
 | Uninstall/rollback | ✅ Working | Byte-identical reversal |
 | Audit/classification | ✅ Working | 17-class taxonomy for build failures |
-| Test suite | ✅ Working | 109 tests, all passing (`go test ./...`) |
+| Test suite | ✅ Working | 112 tests, all passing (`go test ./...`) |
 
 ### Device Revival (`create -stock`)
 | Component | Status | Details |

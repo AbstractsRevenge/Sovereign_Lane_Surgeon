@@ -321,7 +321,9 @@ From a factory image to a booting phone, as proven on cheetah (Pixel 7 Pro) on a
 ./sovereign-lane-surgeon create -stock -devices cheetah -release cp2a \
     -factory-images-root /path/to/factory-images -out /path/to/android-17.0.0_r1
 
-# 3. Build through AOSP Build Capture (run-dir name is the verdict; -jobs 16 lets two lanes share a host)
+# 3. Build through AOSP Build Capture (run-dir name is the verdict). ONE build at a time: two -j16 builds
+#    plus a gate exhausted a 62GB laptop and crashed the editor (2026-09-03); run lanes sequentially, and
+#    from a detached runner (setsid nohup) so no session timeout kills a build mid-way.
 cd /path/to/AOSP_Build_Capture && ./bin/aosp_build_capture -lane aosp17_cheetah_nothing   # analysis gate, ~4 min
 ./bin/aosp_build_capture -lane aosp17_cheetah -jobs 16                                    # m droid superimage, ~1.7 h
 

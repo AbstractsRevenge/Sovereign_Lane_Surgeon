@@ -1,3 +1,18 @@
+# Copyright 2026 The Android Open Source Project
+# Copyright 2026 Sovereign Lane Surgeon
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#      http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
 # Toolchain the bundle's sources were built with at their AOSP tag (build/soong/cc/config/global.go ClangDefaultVersion).
 # create -stock compares this with the target's; a different clang means the mirrored code meets warnings it was never compiled against.
 clang clang-r536225 android-15.0.0_r36

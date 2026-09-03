@@ -45,6 +45,26 @@ import (
 
 const assetsRoot = "assets/aosp15_device"
 
+// licenseHeader is the project's Apache 2.0 header in the '#' comment form (see
+// androidbp_apache2_header.md). Emitted at the top of every generated manifest so regeneration
+// never drops it; every manifest parser skips '#' lines.
+const licenseHeader = `# Copyright 2026 The Android Open Source Project
+# Copyright 2026 Sovereign Lane Surgeon
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#      http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+`
+
 type manifest struct {
 	path, header string
 	lines        []string
@@ -52,7 +72,7 @@ type manifest struct {
 
 func (m *manifest) write() error {
 	sort.Strings(m.lines)
-	body := m.header
+	body := licenseHeader + m.header
 	if len(m.lines) > 0 {
 		body += strings.Join(m.lines, "\n") + "\n"
 	}
@@ -145,7 +165,7 @@ func main() {
 		return contentPath(content.lines[i]) < contentPath(content.lines[j])
 	})
 	content.lines = append([]string{}, content.lines...) // keep write() from re-sorting
-	body := content.header + strings.Join(content.lines, "\n") + "\n"
+	body := licenseHeader + content.header + strings.Join(content.lines, "\n") + "\n"
 	if err := os.WriteFile(content.path, []byte(body), 0o644); err != nil {
 		fmt.Fprintln(os.Stderr, "bundlemanifest:", err)
 		os.Exit(1)

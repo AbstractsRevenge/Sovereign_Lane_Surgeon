@@ -1,0 +1,44 @@
+Sovereign Lane Surgeon
+Copyright 2026 The Android Open Source Project
+Copyright 2026 Sovereign Lane Surgeon
+
+Licensed under the Apache License, Version 2.0 (the "License"); see the LICENSE
+file in the root of this repository, or http://www.apache.org/licenses/LICENSE-2.0
+
+--------------------------------------------------------------------------------
+Third-party and upstream content redistributed in this repository
+--------------------------------------------------------------------------------
+
+The files below are NOT authored here. They are redistributed verbatim and keep
+their own copyright notices and years; nothing in this repository relicenses or
+re-dates them. Their provenance is recorded per directory in
+assets/aosp15_device.sources.
+
+1. assets/aosp15_device/**
+   Device and hardware trees of the Android Open Source Project, copied verbatim
+   from the android-15.0.0_r36 tag (and, for device/google/tegu and
+   device/google/tegu-sepolicy, from android-15.0.0_r31).
+   Copyright (C) The Android Open Source Project. Apache License 2.0.
+
+2. assets/kernel_headers/<family>/kernel-headers/**
+   Vendor kernel UAPI headers from the same AOSP tags.
+   Copyright (C) The Android Open Source Project and the Linux kernel authors.
+
+3. assets/overlays/hardware/**
+   Soong-conversion sources taken verbatim from upstream AOSP commits, retaining
+   their original copyright years (2012–2024).
+   Copyright (C) The Android Open Source Project. Apache License 2.0.
+
+4. internal/blueprint/**
+   The canonical Blueprint parser, vendored because upstream cannot be fetched
+   with `go get` (its pathtools testdata carries glob-character filenames that
+   break module resolution).
+   Copyright (C) 2014 Google Inc. All rights reserved. Apache License 2.0.
+
+--------------------------------------------------------------------------------
+
+The proprietary vendor binaries this toolkit wires into a build are NOT contained
+in or distributed with this repository. They are extracted at run time from a
+Google factory image that the user downloads and accepts the terms for; see
+`fetch-factory-image`, which prints Google's terms and refuses to download until
+they are accepted.

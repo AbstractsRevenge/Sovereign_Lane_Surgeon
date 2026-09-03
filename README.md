@@ -585,3 +585,17 @@ the hazard.
 - **Fail before writing.** Checks that can run before generation (the name guard) do, because the cost of discovering a naming problem after a multi-GB clone and a shared-soong patch is not symmetric with the cost of checking first.
 
 Licensed Apache-2.0. The vendored `internal/blueprint/parser` retains its upstream Apache-2.0 headers.
+
+## License
+
+Apache License 2.0 — the full text is in [LICENSE](LICENSE), and [NOTICE](NOTICE) records the
+upstream content this repository redistributes verbatim.
+
+Every file authored here carries both copyright lines dated 2026, in the form
+[androidbp_apache2_header.md](androidbp_apache2_header.md) documents, and `licenses_test.go` fails
+the suite if one does not. Files copied verbatim from AOSP or another upstream keep their original
+copyright and year: the mirrored device trees, the kernel UAPI headers, the Soong-conversion
+overlays and the vendored Blueprint parser. Re-dating those would misstate their provenance.
+
+The proprietary vendor binaries are never in this repository. They are extracted at run time from
+a factory image you download and accept Google's terms for.

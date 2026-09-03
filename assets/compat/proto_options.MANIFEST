@@ -1,0 +1,5 @@
+# Target-compat operation 6: proto extension options a newer target renamed (protooptions.go).
+# Tab-separated: <defining proto>	<proto package>	<old name>	<new name>	<note>
+# Applied to mirrored .proto files only when the target's defining proto declares <new> and no longer declares <old>.
+# `compat-propose -report <failed run>` derives new rows from an `Option "(pkg.name)" unknown` failure.
+frameworks/proto_logging/stats/atom_field_options.proto	android.os.statsd	module	module_name	"reserved 50004; module has been moved to module_name" in the target's own proto. Observed: cheetah full build 140831Z, pixelstats/pixelatoms.proto ×26.

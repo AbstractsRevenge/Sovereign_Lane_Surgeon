@@ -1,0 +1,6 @@
+# Target-compat operation 5: transitive header exports a newer target dropped (headerexports.go).
+# Tab-separated: <provider>	<provider Android.bp>	<exported lib>	<header prefix>	<header lib to add>	<its Android.bp>	<note>
+# Applied only when the target's provider no longer lists <exported lib> in any export_*_lib_headers
+# and the target defines <header lib>; to mirrored cc_ modules that depend on <provider> and include <prefix>….
+# `compat-propose -report <failed run>` derives new rows from a "'x/y.h' file not found" failure.
+libdmabufheap	system/memory/libdmabufheap/Android.bp	libion	ion/	libion_headers	system/memory/libion/Android.bp	android-15 libdmabufheap re-exported libion's headers (export_static_lib_headers); android-17 dropped libion. Observed: cheetah full build 130400Z, graphics/common/libion.

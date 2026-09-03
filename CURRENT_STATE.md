@@ -68,13 +68,17 @@ The Sovereign Lane Surgeon is a self-contained Go toolkit for creating parallel 
 | Target-compat pass | ✅ Working | 10 operations, each gated on a probe of the target tree (see README) |
 | Kernel prebuilt assembly | ✅ Working | from the factory image: boot/dtbo/Image.lz4, first-stage modules (vendor_kernel_boot or gs101's vendor_boot), dtb, lists, headers; version read from the image |
 | Vendor blob wiring | ✅ Working | self-extractor mechanism + factory android-info.txt (firmware requirements) via USE_ANDROID_INFO |
-| Vendor extraction | ✅ Working | vendor / vendor_dlkm / system_dlkm via debugfs, no root |
+| Vendor extraction | ✅ Working | vendor / vendor_dlkm / system_dlkm / system_ext via debugfs, no root; system_ext blobs wired where device-partial.mk / Android.bp.txt name them |
+| Bundle distribution | ✅ Working | content-addressed: manifest always embedded, content builtin or `-tags nobundle` + `-bundle-dir`/`-bundle-url` verified against it; `bundle export` publishes |
+| Compat table growth | ✅ Working | ops 5/6/8 read asset manifests; `compat-propose` derives rows from a failed build's log + target tree |
+| Docs consistency | ✅ Working | `docs_test.go` pins version, subcommands, op count, device list, provenance |
 | Executable bits | ✅ Working | exec manifest restores modes embed.FS drops |
 
 ### Flashing (`assemble-super`, `flash_<device>.sh`)
 | Component | Status | Details |
 |-----------|--------|---------|
-| Complete super | ✅ Working | prebuilt vendor/vendor_dlkm packed with the build's own build_super_image |
+| Complete super | ✅ Working | from the build itself once the vendor glue is where the device tree includes it (root cause found 2026-09-03); `assemble-super` packs prebuilt partitions only for a pre-fix tree |
+| Preflight | ✅ Working | `preflight`: kernel release, super coverage/fit (liblp parsed in Go), vbmeta coverage vs the factory, android-info firmware lines, vendor glue — exit 1 on any FAIL |
 | Flash script | ✅ Working | firmware requirements, boot chain, vbmeta as signed, full super, explicit f2fs format, reboot |
 | Runtime capture | ✅ Working | Build Capture's `aosp_runtime_log_capture` with the build's host adb on PATH |
 
@@ -104,7 +108,7 @@ The Sovereign Lane Surgeon is a self-contained Go toolkit for creating parallel 
 
 | Limitation | Impact | Workaround |
 |------------|--------|------------|
-| `system_ext.img` contents not extracted | 5–7 blobs per device the self-extractor lists inside system_ext.img (ShannonIms/Rcs, libmediaadaptor, UwbVendorService) are absent from the built image — IMS/RCS/UWB-vendor features only | debugfs-rdump the factory system_ext.img and copy them by hand |
+| Boot proven on gs201 only | felix (gs101) and oriole (zuma) images are measured by `preflight`, not booted | a test device of each family |
 | Projects the target manifest ships must never be overwritten from AOSP 15 | Duplicate/undefined modules that surface far from the cause | Restore from the project's git HEAD; only copy directories absent from the target manifest |
 | Kernel prebuilt dir is not in AOSP for cp2a | Board reads `RELEASE_KERNEL_<DEVICE>_DIR` | `create -stock -release cp2a` / `assemble-kernel` builds it from the factory image (pure Go, no root) |
 | `simg2img` required | Vendor image extraction fails | `sudo apt-get install android-sdk-libsparse-utils` |
@@ -116,7 +120,7 @@ The Sovereign Lane Surgeon is a self-contained Go toolkit for creating parallel 
 
 | Feature | Priority | Description |
 |---------|----------|-------------|
-| `system_ext.img` extraction | 🔴 High | Mount/extract system_ext.img contents |
+| `system_ext.img` extraction | ✅ Done | debugfs, wired by consumer path (2026-09-03) |
 | Full `m droid` validation | ✅ Done | cheetah booted 2026-09-03 |
 | `doctor` auto-apply | 🟡 Medium | Automated fix application from audit |
 | Kernel prebuilt fetch | ✅ Done | `assemble-kernel` from the factory image (v0.4.0) |
@@ -139,7 +143,8 @@ Pixel 7 family (pantah/lynx/tangorpro, gs201) - android-17.0.0_r1
 ├── [✅] Target-compat pass (10 operations) — no hand edit
 ├── [✅] m nothing green: panther, cheetah, lynx, tangorpro (and the other 12 devices)
 ├── [✅] m droid superimage: cheetah, panther, lynx, tangorpro
-├── [✅] assemble-super + flash script
+├── [✅] vendor glue where the tree includes it → complete super, vbmeta_vendor chain, firmware lines (2026-09-03)
+├── [✅] preflight + flash script
 ├── [✅] Physical device boot: cheetah (lock screen 70 s, adb, enforcing, encrypted)
 └── [✅] Tour + runtime capture (camera fault traced to the unit's hardware)
 
@@ -202,7 +207,8 @@ Complete: 6/8 tasks (75%)
 5. [x] Cheetah camera — CLOSED as a fault of this unit, not the port (2026-09-03 02:18Z). Control test on stock (factory system, vendor and boot chain, matching firmware, captured with the same tool into `…/20260903T021809Z_boot_ok_stock-camera-black/`): 0 camera devices, 414 provider crashes, all 32 tombstones carry the identical abort `KRAKEN init error … LwisFence signal status: No such device or address`, rear and front cameras black. Our image's chain of evidence (kernel `lwis-sensor-kraken: I2C Write failed (-6)` → HAL abort loop → camera service add/remove → 0 devices → Camera2 app AIOOBE) is the same fault seen from an eng build. Boot images, module loading and bootconfig were each excluded on the way (factory boot chain over our super fails identically).
 
 ### Medium-term (This Month)
-1. [ ] System_ext.img extraction (the 5–7 blobs per device the self-extractor lists inside system_ext.img — ShannonIms/Rcs, libmediaadaptor, UwbVendorService)
+1. [x] System_ext.img extraction (2026-09-03)
+2. [x] Vendor glue root cause fixed; cheetah `m nothing` green on the loaded vendor board config: run 20260903T032523Z (0 errors); the other 15 gates re-run next, then cheetah rebuilt, `preflight`, reflash
 2. [ ] Flash and tour a second family (gs101 or zuma) once its full build lands — the flash script is per device
 3. [x] Merge v0.4.0 lane work onto main (683d196)
 4. [x] Documentation for the android-17 port: README (operations 1–10, bundle, kernel, flashing), this file, the port changelog

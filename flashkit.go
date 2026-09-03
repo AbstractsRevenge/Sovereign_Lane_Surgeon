@@ -28,16 +28,18 @@ import (
 // flashkit.go — `assemble-super`: the post-build step that makes an android-17 image of a
 // prebuilt-vendor device flashable, and the flash procedure as a script next to it.
 //
-// WHY (measured 2026-09-02/03 on cheetah, Build Capture run 152554Z):
-//   - android-17 assembles super.img in Soong (build/soong/filesystem/super_image.go), whose
-//     partition list is filtered to the partitions Soong itself generated. The vendor and
-//     vendor_dlkm images a Pixel AOSP build takes as PREBUILTS (BOARD_PREBUILT_VENDORIMAGE /
-//     BOARD_PREBUILT_VENDOR_DLKMIMAGE, the self-extractor mechanism) are not generated modules,
-//     so the built super.img held system, system_ext, product and system_dlkm only — lpdump
-//     showed no vendor_a. android-15's Makefile packed prebuilt images into super; 17 does not.
-//     A super without vendor boots nothing. This step runs the build's own build_super_image
-//     with the build's own misc_info.txt plus the prebuilt images, so the result is what 15
-//     would have produced.
+// WHY (measured 2026-09-02/03 on cheetah, Build Capture run 152554Z; root cause found 2026-09-03):
+//   - The built super.img held system, system_ext, product and system_dlkm only — lpdump showed
+//     no vendor_a — and a super without vendor boots nothing. The first reading blamed Soong;
+//     the ninja graph says otherwise: super.img is Make's (build-superimage-target, via
+//     build_super_image), and Make's filter-out-missing-vendor drops vendor/vendor_dlkm from the
+//     list whenever INSTALLED_VENDORIMAGE_TARGET is unset — identical in android-15 and 17. It
+//     was unset because the Surgeon had written BoardConfigVendor.mk flat while the device tree
+//     includes it from proprietary/ (vendorblobs.go, fixed): BOARD_PREBUILT_VENDORIMAGE never
+//     reached the build. With the glue in place the build's own super.img is complete and this
+//     step reports "nothing to add" and only writes the flash script. It remains the fallback
+//     for a tree revived before the fix: the build's build_super_image with the build's
+//     misc_info.txt plus the prebuilt images.
 //   - Three more facts the flash needs, each learned from a failed boot: vbmeta must go on
 //     exactly as the build signed it (`fastboot --disable-verification` rewrites the flags in
 //     flight, breaks the signature, and this bootloader then hands init no androidboot.vbmeta.*
@@ -148,7 +150,7 @@ func flashScript(device, productOut, hostBin, prebuiltDir, superImg string, requ
 	sb.WriteString("#      $F flash bootloader $V/bootloader.img && $F reboot-bootloader && sleep 8\n#      $F flash radio $V/radio.img && $F reboot-bootloader && sleep 8\n")
 	sb.WriteString("$F getvar version-bootloader; $F getvar version-baseband\n\n")
 	sb.WriteString("# 2. Boot chain (the kernel and dtbo are the factory ones re-signed by the build).\nfor p in boot init_boot dtbo vendor_boot vendor_kernel_boot pvmfw; do [ -f \"$P/$p.img\" ] && $F flash $p \"$P/$p.img\"; done\n\n")
-	sb.WriteString("# 3. vbmeta exactly as signed. NEVER --disable-verification: fastboot rewrites the flags in flight,\n#    the signature breaks, and this bootloader then passes init no androidboot.vbmeta.* at all.\n$F flash vbmeta \"$P/vbmeta.img\"\n$F flash vbmeta_system \"$P/vbmeta_system.img\"\n[ -f \"$V/vbmeta_vendor.img\" ] && $F flash vbmeta_vendor \"$V/vbmeta_vendor.img\"\n\n")
+	sb.WriteString("# 3. vbmeta exactly as signed. NEVER --disable-verification: fastboot rewrites the flags in flight,\n#    the signature breaks, and this bootloader then passes init no androidboot.vbmeta.* at all.\n#    vbmeta_vendor: the build's (chained from its vbmeta when BOARD_AVB_VBMETA_VENDOR reached it),\n#    else the factory one.\n$F flash vbmeta \"$P/vbmeta.img\"\n$F flash vbmeta_system \"$P/vbmeta_system.img\"\nif [ -f \"$P/vbmeta_vendor.img\" ]; then $F flash vbmeta_vendor \"$P/vbmeta_vendor.img\"; elif [ -f \"$V/vbmeta_vendor.img\" ]; then $F flash vbmeta_vendor \"$V/vbmeta_vendor.img\"; fi\n\n")
 	sb.WriteString("# 4. The complete super (built partitions + prebuilt vendor/vendor_dlkm).\n$F flash super \"" + superImg + "\"\n\n")
 	sb.WriteString("# 5. Wipe. In bootloader mode `fastboot -w` only erases (the bootloader reports userdata/metadata\n#    as raw) — format them explicitly, or the first boot dies on unformatted partitions.\n$F format:f2fs userdata\n$F format:f2fs metadata\n\n$F reboot\n")
 	return sb.String()
@@ -197,26 +199,27 @@ func cmdAssembleSuper(args []string) int {
 		return 1
 	}
 	fmt.Printf("assemble-super %s: partitions %s\n", *device, strings.Join(plan.Partitions, " "))
+	superImg := filepath.Join(productOut, "super.img")
 	if len(plan.Added) == 0 {
-		fmt.Println("  = the build's super already holds every partition; nothing to add")
+		fmt.Println("  = the build's super.img already holds every partition; nothing to add — the flash script uses it")
 	} else {
-		fmt.Printf("  + from prebuilt images the build did not pack: %s\n", strings.Join(plan.Added, " "))
+		fmt.Printf("  + from prebuilt images the build did not pack: %s (the vendor board config did not reach this build; re-run create -stock)\n", strings.Join(plan.Added, " "))
+		dict := filepath.Join(productOut, "super_full_misc_info.txt")
+		if err := os.WriteFile(dict, []byte(plan.dictText()), 0o644); err != nil {
+			fmt.Fprintln(os.Stderr, "assemble-super:", err)
+			return 1
+		}
+		superImg = filepath.Join(productOut, "super_full.img")
+		tool := filepath.Join(hostBin, "build_super_image")
+		cmd := exec.Command(tool, dict, superImg)
+		cmd.Env = append(os.Environ(), "PATH="+hostBin+":"+os.Getenv("PATH"))
+		if outb, err := cmd.CombinedOutput(); err != nil {
+			fmt.Fprintf(os.Stderr, "assemble-super: %s failed: %v\n%s\n", tool, err, outb)
+			return 1
+		}
+		fi, _ := os.Stat(superImg)
+		fmt.Printf("  → %s (%d MB)\n", superImg, fi.Size()/1e6)
 	}
-	dict := filepath.Join(productOut, "super_full_misc_info.txt")
-	if err := os.WriteFile(dict, []byte(plan.dictText()), 0o644); err != nil {
-		fmt.Fprintln(os.Stderr, "assemble-super:", err)
-		return 1
-	}
-	superImg := filepath.Join(productOut, "super_full.img")
-	tool := filepath.Join(hostBin, "build_super_image")
-	cmd := exec.Command(tool, dict, superImg)
-	cmd.Env = append(os.Environ(), "PATH="+hostBin+":"+os.Getenv("PATH"))
-	if outb, err := cmd.CombinedOutput(); err != nil {
-		fmt.Fprintf(os.Stderr, "assemble-super: %s failed: %v\n%s\n", tool, err, outb)
-		return 1
-	}
-	fi, _ := os.Stat(superImg)
-	fmt.Printf("  → %s (%d MB)\n", superImg, fi.Size()/1e6)
 	reqs := androidInfoRequirements(filepath.Join(*out, "vendor", "google_devices", *device, "android-info.txt"))
 	script := filepath.Join(productOut, "flash_"+*device+".sh")
 	if err := os.WriteFile(script, []byte(flashScript(*device, productOut, hostBin, prebuiltDir, superImg, reqs)), 0o755); err != nil {

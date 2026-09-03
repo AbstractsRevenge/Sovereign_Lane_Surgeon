@@ -17,6 +17,7 @@ package main
 
 import (
 	"bytes"
+	_ "embed"
 	"os"
 	"path/filepath"
 	"strings"
@@ -45,10 +46,28 @@ type lostHeaderExport struct {
 	HeaderLibBp  string // where HeaderLib is defined, repo-relative
 }
 
-var lostHeaderExports = []lostHeaderExport{
-	{Provider: "libdmabufheap", ProviderBp: "system/memory/libdmabufheap/Android.bp", Exported: "libion",
-		HeaderPrefix: "ion/", HeaderLib: "libion_headers", HeaderLibBp: "system/memory/libion/Android.bp"},
+//go:embed assets/compat/header_exports.MANIFEST
+var embeddedHeaderExportsManifest string
+
+// parseHeaderExports reads the tab-separated manifest (comments and short lines skipped).
+func parseHeaderExports(text string) []lostHeaderExport {
+	var out []lostHeaderExport
+	for _, line := range strings.Split(text, "\n") {
+		if strings.TrimSpace(line) == "" || strings.HasPrefix(line, "#") {
+			continue
+		}
+		f := strings.Split(line, "\t")
+		if len(f) < 6 {
+			continue
+		}
+		out = append(out, lostHeaderExport{Provider: f[0], ProviderBp: f[1], Exported: f[2], HeaderPrefix: f[3], HeaderLib: f[4], HeaderLibBp: f[5]})
+	}
+	return out
 }
+
+// The rows live in assets/compat/header_exports.MANIFEST (data, not code): a new release's
+// lost export is a line, and compat-propose writes the line from the failure.
+var lostHeaderExports = parseHeaderExports(embeddedHeaderExportsManifest)
 
 // bpDefinesModule reports whether the Blueprint at rel (under outRoot) defines a module named name.
 func bpDefinesModule(outRoot, rel, name string) bool {

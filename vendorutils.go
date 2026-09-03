@@ -28,7 +28,7 @@ import (
 // near-identical copies that had drifted: one skipped the chown on the rsync fallback).
 //
 // Privilege model (measured 2026-09-02 on CP2A factory images): every partition image this needs
-// (vendor.img, vendor_dlkm.img, system_dlkm.img) is a raw ext2/4 filesystem after simg2img, and
+// (vendor.img, vendor_dlkm.img, system_dlkm.img, system_ext.img) is a raw ext2/4 filesystem after simg2img, and
 // e2fsprogs' `debugfs -R "rdump / <dst>"` reads it WITHOUT root. So the no-root path is tried
 // first and the historical `sudo mount -o loop` path is only the fallback — which is what lets
 // the kernel-dir assembly (kernelprebuilt.go) run in an unattended session with no sudo ticket.
@@ -93,6 +93,9 @@ var vendorImages = []struct{ img, subdir string }{
 	{"vendor.img", "proprietary"},
 	{"vendor_dlkm.img", "dlkm"},
 	{"system_dlkm.img", "system_dlkm"},
+	// system_ext.img holds the blobs the self-extractor lists under system_ext/ (IMS/RCS/UWB
+	// apks, their permission xmls, libmediaadaptor); wireVendorBlobs reads them from here.
+	{"system_ext.img", "system_ext"},
 }
 
 // extractVendorImages extracts every vendorImages entry found in factoryDeviceDir (the per-device

@@ -90,6 +90,12 @@ func main() {
 		os.Exit(cmdExtractVendor(args))
 	case "assemble-super":
 		os.Exit(cmdAssembleSuper(args))
+	case "bundle":
+		os.Exit(cmdBundle(args))
+	case "compat-propose":
+		os.Exit(cmdCompatPropose(args))
+	case "preflight":
+		os.Exit(cmdPreflight(args))
 	case "version", "-v", "--version":
 		fmt.Println("sovereign-lane-surgeon", version)
 	case "help", "-h", "--help":
@@ -141,6 +147,10 @@ SUBCOMMANDS:
                                ref across the lane tree. -deps "//root/dir:mod,bare-name,…". PRIMARY USE:
                                no-Compose lane SystemUI bps carry stale external refs to libs that resolve
                                internally (Dagger/FQN) — drop the ref (points at an empty/absent lib).
+  reexport -name <l> -out <r> -prefix-dirs <P> [-apply]  The re-export idiom (app-naming): when the finder
+                               drops a full-replacement identity app, re-emit the keep-name modules it
+                               exported that the surviving graph still references (AST-detected;
+                               dry-run plan unless -apply).
   doctor  -report <dir|json>   Per classified failure, print (or apply) its recipe (§23.2).
   fetch-factory-image -device <name> -out <dir>  Download+extract a Google Pixel factory image
                                (known: the 16 cp2a devices with an AOSP tree — Pixel 6 … Pixel 9a) from a hand-verified
@@ -165,6 +175,23 @@ SUBCOMMANDS:
                                build_super_image + misc_info), and write flash_<d>.sh with the proven flash
                                sequence (firmware requirements from the blobs' android-info.txt, vbmeta as
                                signed, explicit f2fs format of userdata/metadata).
+  preflight -device <d> -out <root> [-build-out <dir>] [-factory-images-root <dir>]
+                               Before flashing, measure the built images against the factory image:
+                               kernel release, super holds every factory-layout partition and fits,
+                               vbmeta verifies every factory-verified partition the build produces,
+                               android-info.txt names the blobs' firmware, vendor glue in place.
+                               PASS/FAIL per check with the measured values; exit 1 on any FAIL.
+  compat-propose -report <dir|json> -out <root> [-write-to <surgeon src>]
+                               From a FAILED full build, derive the rows the table-driven compat
+                               operations need (lost header re-export, renamed proto option,
+                               neverallowed statement): the facts are looked up in the target tree
+                               and printed in the manifests' own format (or appended with -write-to).
+  bundle info | verify [-dir <d>] | export -out <dir>
+                               The device-tree bundle as content-addressed data: its manifest (sha256 of
+                               every file) is always embedded, the content is embedded by default or
+                               supplied at run time to a -tags nobundle build (create -bundle-dir /
+                               -bundle-url, $SLS_BUNDLE_DIR / $SLS_BUNDLE_URL, verified before use).
+                               export writes the archive + manifest for publishing.
   version
 
 The taxonomy + method are documented in holo_lane_sovereignty_handoff_20260711.md §22.
@@ -218,7 +245,14 @@ func cmdCreate(args []string) int {
 	hwSubtrees := fs.String("hw-subtrees", "", "stock mode: comma-separated non-device subtrees to mirror verbatim from -source-root (e.g. hardware/google/gchips,hardware/google/graphics)")
 	factoryImagesRoot := fs.String("factory-images-root", "", "stock mode: parent dir of per-device factory-image extraction dirs (<root>/<device>/...) to wire as vendor/google_devices/<device>/ blobs")
 	release := fs.String("release", "", "stock mode: target release config (the lunch's middle token, e.g. cp2a); with -factory-images-root, assembles the kernel prebuilt dir RELEASE_KERNEL_<DEVICE>_DIR names")
+	bundleDir := fs.String("bundle-dir", "", "bundle content from this directory (verified against the embedded manifest) instead of the binary/cache; also $SLS_BUNDLE_DIR")
+	bundleURL := fs.String("bundle-url", "", "fetch the bundle archive (.tar.gz from `bundle export`) into the cache when the binary carries none (-tags nobundle); also $SLS_BUNDLE_URL")
 	_ = fs.Parse(args)
+
+	if err := resolveBundle(*bundleDir, *bundleURL, *stock); err != nil {
+		fmt.Fprintln(os.Stderr, "create:", err)
+		return 1
+	}
 
 	if *stock {
 		return cmdCreateStock(stockArgs{

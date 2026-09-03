@@ -337,11 +337,13 @@ func reconcileKernelVersion(outRoot, family string, products []string, version s
 // vendor.img / vendor_dlkm.img / system_dlkm.img contents (vendorutils.go, no root needed when
 // debugfs is present).
 func extractVendorBlobsFromFactory(outRoot, family, device, factoryDir string) error {
-	if err := wireVendorBlobs(outRoot, family, device, factoryDir); err != nil {
-		return fmt.Errorf("wireVendorBlobs: %w", err)
-	}
+	// Images first: the extract list names files inside system_ext.img, which wireVendorBlobs
+	// then reads out of the unpacked tree.
 	if _, err := extractVendorImages(device, factoryDir, outRoot); err != nil {
 		return fmt.Errorf("extractVendorImages: %w", err)
+	}
+	if err := wireVendorBlobs(outRoot, family, device, factoryDir); err != nil {
+		return fmt.Errorf("wireVendorBlobs: %w", err)
 	}
 	return nil
 }

@@ -17,6 +17,7 @@ package main
 
 import (
 	"bytes"
+	_ "embed"
 	"os"
 	"path/filepath"
 	"strings"
@@ -38,9 +39,26 @@ type renamedProtoOption struct {
 	Old, New string
 }
 
-var renamedProtoOptions = []renamedProtoOption{
-	{DefProto: "frameworks/proto_logging/stats/atom_field_options.proto", Package: "android.os.statsd", Old: "module", New: "module_name"},
+//go:embed assets/compat/proto_options.MANIFEST
+var embeddedProtoOptionsManifest string
+
+func parseProtoOptions(text string) []renamedProtoOption {
+	var out []renamedProtoOption
+	for _, line := range strings.Split(text, "\n") {
+		if strings.TrimSpace(line) == "" || strings.HasPrefix(line, "#") {
+			continue
+		}
+		f := strings.Split(line, "\t")
+		if len(f) < 4 {
+			continue
+		}
+		out = append(out, renamedProtoOption{DefProto: f[0], Package: f[1], Old: f[2], New: f[3]})
+	}
+	return out
 }
+
+// The rows live in assets/compat/proto_options.MANIFEST (data, not code).
+var renamedProtoOptions = parseProtoOptions(embeddedProtoOptionsManifest)
 
 // protoDeclaresField reports whether the proto text declares a field named name
 // (`… string name = N;` on one line, comments stripped).

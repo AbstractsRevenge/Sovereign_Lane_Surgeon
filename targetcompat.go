@@ -455,6 +455,10 @@ func repinConflictingAidl(outRoot string, roots []string, r *compatReport) {
 
 // applyTargetCompat runs the three operations over roots (repo-relative subtrees) and returns
 // what changed. Order matters only for reporting.
+// targetCompatOperations is how many operations applyTargetCompat runs; the README's numbered
+// list and CURRENT_STATE are checked against it (docs_test.go).
+const targetCompatOperations = 10
+
 func applyTargetCompat(outRoot string, roots []string) compatReport {
 	var r compatReport
 	dropIllegalCflags(outRoot, roots, &r)

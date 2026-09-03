@@ -1,0 +1,60 @@
+<!--
+Copyright 2026 The Android Open Source Project
+Copyright 2026 Sovereign Lane Surgeon
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+     http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+-->
+
+# Sovereign Lane Surgeon
+
+A self-contained Go toolkit that takes a **Google Pixel factory image** and produces a **working
+AOSP build for that physical device**, on a release the device was never shipped on.
+
+It was built to answer one question: android-17 dropped the device trees for every Pixel that
+predates it, so can those devices be revived faithfully, from data rather than from guesswork?
+On 2026-09-03 a Pixel 7 Pro booted an android-17 image the toolkit seeded, built and flashed.
+
+## What is actually proven
+
+Claims here are separated by evidence, not by confidence.
+
+| Claim | Evidence |
+|---|---|
+| Seeds a green build from nothing but a factory image | All 16 cp2a devices with an AOSP tree, replayed from a wiped tree, no hand edits |
+| Produces a complete, flashable image | 9 full images across gs101, gs201, zuma and zumapro; every one passes `preflight` |
+| The image boots a real phone | **One device.** cheetah (Pixel 7 Pro), twice, 48 s to lock screen |
+| Works on a device family it has never seen | Untested. Each new SoC family so far cost one or two toolkit defects, found at build time |
+
+The gap between the second and third rows is the honest one. An image measured correct offline is
+not the same as a phone that boots, and only gs201 has crossed it.
+
+## Where to go next
+
+- **[[Quick Start]]** — factory image to booting phone, the real command sequence
+- **[[How It Works]]** — why it reads the target tree instead of carrying a patch list
+- **[[Verification]]** — what `verify-seed`, `preflight` and `bundle audit` each prove
+- **[[Device Support]]** — which devices, and what adding one costs
+- **[[Troubleshooting]]** — every real failure this port hit, and what it meant
+
+Current state, per device and per run, lives in
+[CURRENT_STATE.md](https://github.com/AbstractsRevenge/sovereign_lane_surgeon/blob/main/CURRENT_STATE.md)
+in the repository, which is the authoritative record. This wiki explains; it does not track status.
+
+## Requirements
+
+A Linux host, Go, and the usual AOSP build dependencies. `debugfs` from e2fsprogs lets vendor
+extraction run without root. No external AOSP 15 checkout is needed: the device trees are in the
+binary, or fetched and verified on demand.
+
+Licensed under Apache 2.0. Proprietary vendor binaries are never distributed here; they come from
+a factory image you download and accept Google's terms for.

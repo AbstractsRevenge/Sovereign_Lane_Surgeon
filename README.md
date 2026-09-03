@@ -586,6 +586,16 @@ the hazard.
 
 Licensed Apache-2.0. The vendored `internal/blueprint/parser` retains its upstream Apache-2.0 headers.
 
+## Documentation
+
+- **[Wiki](https://github.com/AbstractsRevenge/sovereign_lane_surgeon/wiki)** — orientation and
+  task-oriented guides: quick start, how it works, verification, bundle distribution, device
+  support, troubleshooting. Source in [`wiki/`](wiki/), published as described in
+  [`wiki/PUBLISHING.md`](wiki/PUBLISHING.md).
+- **[CURRENT_STATE.md](CURRENT_STATE.md)** — the authoritative record of what is proven, per device
+  and per run. The wiki explains; this tracks.
+- This README — the design notes and the reasoning behind each operation.
+
 ## License
 
 Apache License 2.0 — the full text is in [LICENSE](LICENSE), and [NOTICE](NOTICE) records the

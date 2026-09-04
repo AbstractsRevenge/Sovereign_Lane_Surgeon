@@ -18,6 +18,7 @@ limitations under the License.
 ### Sovereign Lane Surgeon
 
 - [[Home]]
+- [[AOSP Setup]]
 - [[Quick Start]]
 - [[How It Works]]
 - [[Verification]]

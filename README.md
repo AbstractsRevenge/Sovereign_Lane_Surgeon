@@ -39,7 +39,7 @@ from the factory image.
 |---|---|
 | Seeds a green build from a factory image | All 16 cp2a devices with an AOSP tree, replayed from a wiped tree, no hand edits |
 | Produces a complete, flashable image | 9 full images across gs101, gs201, zuma and zumapro; every one passes `preflight` |
-| The image boots a real phone | **One device.** cheetah (Pixel 7 Pro), twice, 48 s to lock screen |
+| The image boots a real phone | **Measured on one device**, cheetah (Pixel 7 Pro), twice, 48 s to lock screen. Panther and lynx boot as well, reported by the maintainer; not yet captured by the toolkit |
 
 The per-device table is on the [wiki's Home page](https://github.com/AbstractsRevenge/Sovereign_Lane_Surgeon/wiki);
 run identifiers are in [CURRENT_STATE.md](CURRENT_STATE.md).

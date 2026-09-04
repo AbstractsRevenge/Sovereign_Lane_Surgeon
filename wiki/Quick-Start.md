@@ -20,6 +20,8 @@ limitations under the License.
 From a factory image to a booting phone. This is the sequence that was actually run on cheetah,
 not an idealised one.
 
+Assumes a synced android-17 tree and its dependencies; if you have neither, start at [[AOSP Setup]].
+
 ## 0. Build the tool
 
 ```bash

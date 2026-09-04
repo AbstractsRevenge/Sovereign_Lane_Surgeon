@@ -28,8 +28,8 @@ what is expected to work; the levels are cumulative.
 | Device | Product | SoC | Tree from | Proven |
 |---|---|---|---|---|
 | cheetah | Pixel 7 Pro | gs201 | android-15.0.0_r36 | **Boots** — full image, preflight, flashed, toured |
-| panther | Pixel 7 | gs201 | r36 | full image, preflight clean |
-| lynx | Pixel 7a | gs201 | r36 | full image, preflight clean |
+| panther | Pixel 7 | gs201 | r36 | full image, preflight clean; **boots**, reported by the maintainer (not yet captured by the toolkit) |
+| lynx | Pixel 7a | gs201 | r36 | full image, preflight clean; **boots**, reported by the maintainer (not yet captured by the toolkit) |
 | tangorpro | Pixel Tablet | gs201 | r36 | full image, preflight clean |
 | felix | Pixel Fold | gs201 | r36 | full image, preflight clean |
 | oriole | Pixel 6 | gs101 | r36 | full image, preflight clean |
@@ -85,7 +85,7 @@ Claims here are separated by evidence, not by confidence.
 |---|---|
 | Seeds a green build from nothing but a factory image | All 16 cp2a devices with an AOSP tree, replayed from a wiped tree, no hand edits |
 | Produces a complete, flashable image | 9 full images across gs101, gs201, zuma and zumapro; every one passes `preflight` |
-| The image boots a real phone | **One device.** cheetah (Pixel 7 Pro), twice, 48 s to lock screen |
+| The image boots a real phone | **Measured on one device**: cheetah (Pixel 7 Pro), twice, 48 s to lock screen. Panther and lynx boot as well, reported by the maintainer from hands-on use; they have not been captured by the toolkit's runtime capture yet |
 | Works on a device family it has never seen | Untested. Each new SoC family so far cost one or two toolkit defects, found at build time |
 
 The gap between the second and third rows is the honest one. An image measured correct offline is
@@ -93,6 +93,7 @@ not the same as a phone that boots, and only gs201 has crossed it.
 
 ## Where to go next
 
+- **[[AOSP Setup]]** — dependencies, the repo tool, and syncing android-17
 - **[[Quick Start]]** — factory image to booting phone, the real command sequence
 - **[[How It Works]]** — why it reads the target tree instead of carrying a patch list
 - **[[Verification]]** — what `verify-seed`, `preflight` and `bundle audit` each prove

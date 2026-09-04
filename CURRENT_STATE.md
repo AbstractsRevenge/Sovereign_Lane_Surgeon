@@ -17,7 +17,7 @@ limitations under the License.
 
 # Sovereign Lane Surgeon - Current State
 
-**Last Updated:** 2026-09-03 13:00 UTC  
+**Last Updated:** 2026-09-04 03:10 UTC  
 **Version:** v0.4.0  
 **Status:** **Port complete for every SoC generation cp2a ships.** All 16 devices `m nothing` green from `create -stock` alone; 9 full images (gs201 ×5, gs101, zuma, zumapro ×2 incl. the r31 tegu tree), every one `preflight` FLASHABLE; **cheetah boots the Surgeon-built android-17 image** — first 2026-09-03 01:12 UTC, re-proven 07:11 UTC on the build's **own** complete super. Seven siblings deferred by decision (no test devices). Next horizon: Holo transformations.  
 
@@ -232,6 +232,12 @@ Cost of finding them: ~70 minutes of machine time. Cost of not finding them: eve
 zumapro device silently unbuildable, with a green analysis gate.
 
 ---
+
+## 📦 Published (2026-09-04)
+
+- **Repository public** at github.com/AbstractsRevenge/Sovereign_Lane_Surgeon, history rewritten to the noreply identity before publication; CI green on the first run.
+- **Release v0.4.0**: full binary (511 MB), slim binary (15 MB, `-tags nobundle`), bundle archive `sls-bundle-692dded8e614a01b.tar.gz` (304 MB) and its manifest. **Proven from the live URLs:** the published slim binary fetched the published archive, verified all 7130 files, seeded lynx into an empty root, and passed its own structural checks.
+- **Front door**: README is 92 lines; the device-revival reference is DESIGN.md, the lane toolkit is LANES.md, orientation is the wiki (9 pages, three ROM screenshots, supported-devices table on Home).
 
 ## 🎯 Next Steps
 

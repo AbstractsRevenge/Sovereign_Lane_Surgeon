@@ -27,7 +27,7 @@ done on: Ubuntu 26.04, 32 cores, 62 GB of RAM.
 |---|---|---|
 | RAM | 62 GB | **one build at a time.** Two concurrent -j16 builds plus an analysis gate exhausted it and took the editor down |
 | Cores | 32 | full lanes run `m -j20`; a full image takes 1 to 3 hours |
-| Disk | ~300 GB free | the synced tree is ~250 GB; each device's output directory adds ~100 GB; factory images ~3 GB each |
+| Disk | ~300 GB free | the synced tree is ~250 GB; each device's output directory adds ~120 GB (cheetah's measured 119 GB); factory images ~3 GB each |
 
 ## 1. Build dependencies
 
@@ -123,4 +123,4 @@ export OUT_DIR=out-aosp17/cheetah/eng
 ```
 
 `preflight` and `assemble-super` look there by default (`-build-out` overrides). Each such
-directory grows to roughly 100 GB for a full image.
+directory grows to roughly 120 GB for a full image; cheetah's measured 119 GB.

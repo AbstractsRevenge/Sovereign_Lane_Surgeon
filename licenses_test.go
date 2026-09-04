@@ -1,5 +1,5 @@
-// Copyright 2026 The Android Open Source Project
-// Copyright 2026 Sovereign Lane Surgeon
+// Copyright 2026 Terrance Leverette (AbstractsRevenge)
+// Sovereign Lane Surgeon: https://github.com/AbstractsRevenge/Sovereign_Lane_Surgeon
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -23,8 +23,9 @@ import (
 	"testing"
 )
 
-// licenses_test.go — every file authored HERE carries both copyright lines dated 2026 and the
-// Apache 2.0 block; every file redistributed verbatim keeps the copyright it came with.
+// licenses_test.go — every file authored HERE carries the author's copyright line dated 2026, the
+// project line, and the Apache 2.0 block; every file redistributed verbatim keeps the copyright it
+// came with (and must NOT carry the author's).
 //
 // Enforced rather than swept, for the same reason docs_test.go exists: a one-time pass is correct
 // until the next file is added. The canonical forms live in androidbp_apache2_header.md and the
@@ -90,8 +91,8 @@ func authoredHere(rel string) bool {
 
 func TestEveryAuthoredFileCarriesTheApacheHeader(t *testing.T) {
 	const (
-		aosp    = "Copyright 2026 The Android Open Source Project"
-		project = "Copyright 2026 Sovereign Lane Surgeon"
+		aosp    = "Copyright 2026 Terrance Leverette (AbstractsRevenge)"
+		project = "Sovereign Lane Surgeon: https://github.com/AbstractsRevenge/Sovereign_Lane_Surgeon"
 		apache  = "Licensed under the Apache License, Version 2.0"
 	)
 	checked := 0
@@ -127,7 +128,7 @@ func TestEveryAuthoredFileCarriesTheApacheHeader(t *testing.T) {
 
 // Verbatim upstream files must NOT have been re-dated to 2026: that would misstate provenance.
 func TestUpstreamFilesKeepTheirOwnCopyright(t *testing.T) {
-	const project = "Copyright 2026 Sovereign Lane Surgeon"
+	const project = "Copyright 2026 Terrance Leverette"
 	checked := 0
 	for _, rel := range trackedFiles(t) {
 		if authoredHere(rel) || noHeaderNeeded[rel] || isBinaryAsset(rel) {

@@ -1,5 +1,5 @@
-// Copyright 2026 The Android Open Source Project
-// Copyright 2026 Sovereign Lane Surgeon
+// Copyright 2026 Terrance Leverette (AbstractsRevenge)
+// Sovereign Lane Surgeon: https://github.com/AbstractsRevenge/Sovereign_Lane_Surgeon
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -48,8 +48,8 @@ const assetsRoot = "assets/aosp15_device"
 // licenseHeader is the project's Apache 2.0 header in the '#' comment form (see
 // androidbp_apache2_header.md). Emitted at the top of every generated manifest so regeneration
 // never drops it; every manifest parser skips '#' lines.
-const licenseHeader = `# Copyright 2026 The Android Open Source Project
-# Copyright 2026 Sovereign Lane Surgeon
+const licenseHeader = `# Copyright 2026 Terrance Leverette (AbstractsRevenge)
+# Sovereign Lane Surgeon: https://github.com/AbstractsRevenge/Sovereign_Lane_Surgeon
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.

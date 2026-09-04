@@ -1,6 +1,6 @@
 <!--
-Copyright 2026 The Android Open Source Project
-Copyright 2026 Sovereign Lane Surgeon
+Copyright 2026 Terrance Leverette (AbstractsRevenge)
+Sovereign Lane Surgeon: https://github.com/AbstractsRevenge/Sovereign_Lane_Surgeon
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -15,28 +15,32 @@ See the License for the specific language governing permissions and
 limitations under the License.
 -->
 
-# Apache 2.0 header — the canonical form for this project
+# Apache 2.0 header: the canonical form for this project
 
-Every file authored **in this repository** carries both copyright lines, dated 2026, followed by
-the Apache 2.0 block. Files taken **verbatim from AOSP or another upstream** keep their original
-copyright and year unchanged: `assets/aosp15_device/**` (the mirrored device trees),
-`assets/kernel_headers/<family>/**` (kernel UAPI headers), `assets/overlays/hardware/**`
+Every file authored **in this repository** carries the author's copyright line, the project line,
+and the Apache 2.0 block. The copyright holder is a person, because a project name cannot hold
+copyright; the project line identifies the work and where it lives.
+
+Files taken **verbatim from AOSP or another upstream** keep their original copyright and year
+unchanged and never carry the author's line: `assets/aosp15_device/**` (the mirrored device
+trees), `assets/kernel_headers/<family>/**` (kernel UAPI headers), `assets/overlays/hardware/**`
 (upstream Soong-conversion sources) and `internal/blueprint/**` (the vendored Blueprint parser).
-Relicensing or re-dating those would misstate their provenance.
+Relicensing or re-dating those would misstate their provenance; adding the author's line to them
+would claim work that is not his.
 
-Binary assets — the screenshots under `wiki/images/`, and anything else that cannot hold a comment
-— are covered by the repository's `LICENSE` instead. They are excluded by extension, listed
+Binary assets, the screenshots under `wiki/images/` and anything else that cannot hold a comment,
+are covered by the repository's `LICENSE` instead. They are excluded by extension, listed
 explicitly in the test rather than skipped silently, so adding one is a deliberate act.
 
-`licenses_test.go` enforces this: it walks every tracked file, applies those exclusions, and fails
-the suite when an authored file is missing the header — the same way `docs_test.go` fails when the
-documentation drifts from the code.
+`licenses_test.go` enforces all of this: it walks every tracked file, applies those exclusions,
+fails the suite when an authored file is missing the header, and fails it when an upstream file
+carries the author's line.
 
-## Go, Blueprint (`.bp`) and C/C++ — `//`
+## Go, Blueprint (`.bp`) and C/C++: `//`
 
 ```
-// Copyright 2026 The Android Open Source Project
-// Copyright 2026 Sovereign Lane Surgeon
+// Copyright 2026 Terrance Leverette (AbstractsRevenge)
+// Sovereign Lane Surgeon: https://github.com/AbstractsRevenge/Sovereign_Lane_Surgeon
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -54,8 +58,8 @@ documentation drifts from the code.
 ## Makefiles, manifests and other `#`-comment data files
 
 ```
-# Copyright 2026 The Android Open Source Project
-# Copyright 2026 Sovereign Lane Surgeon
+# Copyright 2026 Terrance Leverette (AbstractsRevenge)
+# Sovereign Lane Surgeon: https://github.com/AbstractsRevenge/Sovereign_Lane_Surgeon
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -74,8 +78,8 @@ documentation drifts from the code.
 
 ```
 <!--
-Copyright 2026 The Android Open Source Project
-Copyright 2026 Sovereign Lane Surgeon
+Copyright 2026 Terrance Leverette (AbstractsRevenge)
+Sovereign Lane Surgeon: https://github.com/AbstractsRevenge/Sovereign_Lane_Surgeon
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.

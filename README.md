@@ -1,6 +1,6 @@
 <!--
-Copyright 2026 The Android Open Source Project
-Copyright 2026 Sovereign Lane Surgeon
+Copyright 2026 Terrance Leverette (AbstractsRevenge)
+Sovereign Lane Surgeon: https://github.com/AbstractsRevenge/Sovereign_Lane_Surgeon
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -85,8 +85,16 @@ run with `-bundle-url` pointing at the archive.
 
 ## License
 
-Apache License 2.0, in [LICENSE](LICENSE); [NOTICE](NOTICE) records the upstream content
-redistributed verbatim. Every authored file carries the header in
-[androidbp_apache2_header.md](androidbp_apache2_header.md), enforced by `licenses_test.go`.
-Proprietary vendor binaries are never in this repository: they come from a factory image you
-download and accept Google's terms for.
+Apache License 2.0, free to use, modify and redistribute; the full text is in [LICENSE](LICENSE).
+Every authored file carries `Copyright 2026 Terrance Leverette (AbstractsRevenge)` and the project line, in the form
+[androidbp_apache2_header.md](androidbp_apache2_header.md) documents, enforced by
+`licenses_test.go`. Redistributions must keep those notices and [NOTICE](NOTICE), which is how
+credit travels with the code.
+
+If you build something with it, a mention is appreciated. [CITATION.cff](CITATION.cff) gives the
+form, and GitHub's "Cite this repository" button renders it.
+
+The AOSP device trees under `assets/` keep the Android Open Source Project's own copyright and
+notices; NOTICE lists every piece of redistributed upstream content. This is an independent
+project, not an official part of Android or Google. Proprietary vendor binaries are never in this
+repository: they come from a factory image you download and accept Google's terms for.

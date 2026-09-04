@@ -1,6 +1,6 @@
 <!--
-Copyright 2026 The Android Open Source Project
-Copyright 2026 Sovereign Lane Surgeon
+Copyright 2026 Terrance Leverette (AbstractsRevenge)
+Sovereign Lane Surgeon: https://github.com/AbstractsRevenge/Sovereign_Lane_Surgeon
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -114,19 +114,23 @@ binary, or fetched and verified on demand.
 ## License
 
 Sovereign Lane Surgeon is licensed under the
-[Apache License 2.0](https://github.com/AbstractsRevenge/Sovereign_Lane_Surgeon/blob/main/LICENSE).
-Every authored file, these wiki pages included, carries both copyright lines:
+[Apache License 2.0](https://github.com/AbstractsRevenge/Sovereign_Lane_Surgeon/blob/main/LICENSE),
+free to use, modify and redistribute. Every authored file, these wiki pages included, carries:
 
 ```
-Copyright 2026 The Android Open Source Project
-Copyright 2026 Sovereign Lane Surgeon
+Copyright 2026 Terrance Leverette (AbstractsRevenge)
+Sovereign Lane Surgeon: https://github.com/AbstractsRevenge/Sovereign_Lane_Surgeon
 ```
+
+Apache 2.0 requires anyone redistributing the toolkit to keep those notices, the LICENSE, and the
+[NOTICE](https://github.com/AbstractsRevenge/Sovereign_Lane_Surgeon/blob/main/NOTICE) file,
+which is how credit travels with the code. If you build something with it, a mention is
+appreciated; a
+[CITATION.cff](https://github.com/AbstractsRevenge/Sovereign_Lane_Surgeon/blob/main/CITATION.cff)
+gives the form.
 
 The device trees it redistributes belong to the Android Open Source Project, copied verbatim from
 the `android-15.0.0_r36` and `android-15.0.0_r31` tags under that same license and keeping their
-original notices;
-[NOTICE](https://github.com/AbstractsRevenge/Sovereign_Lane_Surgeon/blob/main/NOTICE) lists each.
-
-This is an independent project. It is not an official part of Android or Google, and no
-proprietary vendor binary is ever in the repository, its releases, or this wiki: those come from
-a factory image you download and accept Google's terms for.
+original notices; NOTICE lists each. This is an independent project, not an official part of
+Android or Google, and no proprietary vendor binary is ever in the repository, its releases, or
+this wiki: those come from a factory image you download and accept Google's terms for.

@@ -52,6 +52,27 @@ mustang, rango) have no AOSP tree in any tag and cannot be supported. The per-de
 [wiki's Home page](https://github.com/AbstractsRevenge/Sovereign_Lane_Surgeon/wiki); run
 identifiers are in [CURRENT_STATE.md](CURRENT_STATE.md).
 
+## The name, and the other half
+
+The name comes from the repository's original purpose, which is still here. Customizing AOSP at
+the platform level has two established options: runtime overlays, which are safe but bounded, and
+forking the whole tree, which is unbounded but unmaintainable. **Lane sovereignty** is a third
+path. Your customization lives in parallel directories, `frameworks-<lane>/` and
+`packages-<lane>/`, and the build's file finder does per-file replacement, so the lane builds like
+stock, as a first-class product variant, without overlays and without forking the tree. The
+**surgeon** is what seeds one: it wires the Soong routing, generates the device and emulator
+products, mirrors the subtrees you choose to fork, and rewrites the cross-references, so that a
+working lane exists before you have edited a file.
+
+```bash
+./sovereign-lane-surgeon create -name myui -devices lynx -out /path/to/aosp
+```
+
+Device revival grew out of that: a revived Pixel is a lane's stock foundation, seeded from the
+same `create` command with `-stock`. The lane toolkit is documented in full in
+[LANES.md](LANES.md), including the sixteen blocker classes a whole-root fork of `frameworks/` and
+`packages/` surfaced on its way to a green `m droid`.
+
 ## It checks its own work
 
 Every defect this port hit was a seed that *looked* complete and failed 25 to 46 minutes into a
@@ -107,8 +128,8 @@ The full sequence, with what each step measured on cheetah, is on the wiki's
 | `extract-vendor`, `assemble-kernel` | the vendor and kernel halves of `create -stock`, standalone |
 | `audit`, `verify`, `doctor` | classify a failed build against the blocker taxonomy |
 
-The lane-forking half of the repository (`create` without `-stock`, plus `apply`, `uninstall`,
-`requalify`, `rename-module`, `drop-dep` and `reexport`) is documented in [LANES.md](LANES.md).
+The lane commands (`create` without `-stock`, plus `apply`, `uninstall`, `requalify`,
+`rename-module`, `drop-dep` and `reexport`) are documented in [LANES.md](LANES.md).
 `sovereign-lane-surgeon help` prints the full usage.
 
 ## Why this repository is large
@@ -134,7 +155,7 @@ published slim binary must seed a device from the published archive.
 - **[Wiki](https://github.com/AbstractsRevenge/Sovereign_Lane_Surgeon/wiki)**: AOSP setup, quick start, how it works, verification, bundle distribution, device support, troubleshooting, evidence. Source in [`wiki/`](wiki/).
 - **[DESIGN.md](DESIGN.md)**: the reasoning behind every operation, the bundle, the flashing lessons, the verifiers, with the measurement each came from.
 - **[CURRENT_STATE.md](CURRENT_STATE.md)**: the authoritative per-device, per-run record.
-- **[LANES.md](LANES.md)**: the repository's original half, forking parallel lane builds of AOSP.
+- **[LANES.md](LANES.md)**: the lane toolkit, the repository's namesake and original half.
 
 Adding a device already in the bundle is a factory image away; adding a new family means adding
 its tree and expecting the first full build to surface a defect or two, as every new SoC

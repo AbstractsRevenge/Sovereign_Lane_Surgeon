@@ -20,6 +20,41 @@ limitations under the License.
 A self-contained Go toolkit that takes a **Google Pixel factory image** and produces a **buildable
 AOSP source tree** for that phone, then an image that boots on it.
 
+## Supported devices
+
+Every cp2a device that has an AOSP device tree. "Proven" means what has actually been done, not
+what is expected to work; the levels are cumulative.
+
+| Device | Product | SoC | Tree from | Proven |
+|---|---|---|---|---|
+| cheetah | Pixel 7 Pro | gs201 | android-15.0.0_r36 | **Boots** — full image, preflight, flashed, toured |
+| panther | Pixel 7 | gs201 | r36 | full image, preflight clean |
+| lynx | Pixel 7a | gs201 | r36 | full image, preflight clean |
+| tangorpro | Pixel Tablet | gs201 | r36 | full image, preflight clean |
+| felix | Pixel Fold | gs201 | r36 | full image, preflight clean |
+| oriole | Pixel 6 | gs101 | r36 | full image, preflight clean |
+| husky | Pixel 8 Pro | zuma | r36 | full image, preflight clean |
+| komodo | Pixel 9 Pro XL | zumapro | r36 | full image, preflight clean |
+| tegu | Pixel 9a | zumapro | android-15.0.0_r31 | full image, preflight clean |
+| raven | Pixel 6 Pro | gs101 | r36 | analysis gate green |
+| bluejay | Pixel 6a | gs101 | r36 | analysis gate green |
+| shiba | Pixel 8 | zuma | r36 | analysis gate green |
+| akita | Pixel 8a | zuma | r36 | analysis gate green |
+| tokay | Pixel 9 | zumapro | r36 | analysis gate green |
+| caiman | Pixel 9 Pro | zumapro | r36 | analysis gate green |
+| comet | Pixel 9 Pro Fold | zumapro | r36 | analysis gate green |
+
+The seven at "analysis gate green" build a coherent graph from `create -stock` alone but have not
+had a full image built, by choice: they share their trees and SoC with a device above that has,
+and there is no test hardware for them. Every SoC generation cp2a ships has at least one full,
+preflight-clean image.
+
+**Not supported:** blazer, frankel, mustang and rango have CP2A factory images but no AOSP device
+tree in any tag, so there is nothing to revive them from.
+
+Per-device run identifiers live in
+[CURRENT_STATE.md](https://github.com/AbstractsRevenge/Sovereign_Lane_Surgeon/blob/main/CURRENT_STATE.md).
+
 ## The gap it closes
 
 These phones run android-17. Google supports them on it and publishes CP2A factory images for all

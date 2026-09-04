@@ -42,7 +42,7 @@ On 2026-09-03 a Pixel 7 Pro booted an android-17 image seeded, built and flashed
 
 ## What is actually proven
 
-[![CI](https://github.com/AbstractsRevenge/sovereign_lane_surgeon/actions/workflows/ci.yml/badge.svg)](https://github.com/AbstractsRevenge/sovereign_lane_surgeon/actions/workflows/ci.yml)
+[![CI](https://github.com/AbstractsRevenge/Sovereign_Lane_Surgeon/actions/workflows/ci.yml/badge.svg)](https://github.com/AbstractsRevenge/Sovereign_Lane_Surgeon/actions/workflows/ci.yml)
 
 Claims here are separated by evidence, not by confidence.
 
@@ -66,7 +66,7 @@ not the same as a phone that boots, and only gs201 has crossed it.
 - **[[Evidence]]** — the artifacts behind the claims above, and continuous integration
 
 Current state, per device and per run, lives in
-[CURRENT_STATE.md](https://github.com/AbstractsRevenge/sovereign_lane_surgeon/blob/main/CURRENT_STATE.md)
+[CURRENT_STATE.md](https://github.com/AbstractsRevenge/Sovereign_Lane_Surgeon/blob/main/CURRENT_STATE.md)
 in the repository, which is the authoritative record. This wiki explains; it does not track status.
 
 ## Requirements

@@ -26,8 +26,8 @@ import (
 	"strconv"
 	"strings"
 
-	parser "github.com/AbstractsRevenge/sovereign_lane_surgeon/internal/blueprint/parser"
-	"github.com/AbstractsRevenge/sovereign_lane_surgeon/internal/bpflags"
+	parser "github.com/AbstractsRevenge/Sovereign_Lane_Surgeon/internal/blueprint/parser"
+	"github.com/AbstractsRevenge/Sovereign_Lane_Surgeon/internal/bpflags"
 )
 
 // werror.go — target-compat operation 9: -Werror under a newer toolchain.

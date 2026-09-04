@@ -32,7 +32,7 @@ import (
 	"os"
 	"strings"
 
-	"github.com/AbstractsRevenge/sovereign_lane_surgeon/internal/bpflags"
+	"github.com/AbstractsRevenge/Sovereign_Lane_Surgeon/internal/bpflags"
 )
 
 func main() {

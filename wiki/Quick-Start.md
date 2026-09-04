@@ -23,7 +23,7 @@ not an idealised one.
 ## 0. Build the tool
 
 ```bash
-git clone git@github.com:AbstractsRevenge/sovereign_lane_surgeon.git
+git clone git@github.com:AbstractsRevenge/Sovereign_Lane_Surgeon.git
 cd sovereign_lane_surgeon
 go build -o sovereign-lane-surgeon .
 ```

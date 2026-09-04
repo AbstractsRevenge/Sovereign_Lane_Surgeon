@@ -28,7 +28,7 @@ import (
 	"strconv"
 	"strings"
 
-	parser "github.com/AbstractsRevenge/sovereign_lane_surgeon/internal/blueprint/parser"
+	parser "github.com/AbstractsRevenge/Sovereign_Lane_Surgeon/internal/blueprint/parser"
 )
 
 // compatpropose.go — `compat-propose`: turn a failed full build into the manifest rows the

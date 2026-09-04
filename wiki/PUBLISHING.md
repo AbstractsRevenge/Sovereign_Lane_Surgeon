@@ -26,7 +26,7 @@ that carries no history worth keeping on its own.
 GitHub does not create a wiki's git repository until the wiki has its first page, and there is no
 API for it. So once, by hand:
 
-1. Open <https://github.com/AbstractsRevenge/sovereign_lane_surgeon/settings> and make sure
+1. Open <https://github.com/AbstractsRevenge/Sovereign_Lane_Surgeon/settings> and make sure
    **Wikis** is enabled under Features.
 2. Open the repository's **Wiki** tab and click **Create the first page**. Any content will do;
    the sync below overwrites it.
@@ -37,7 +37,7 @@ After that, `sovereign_lane_surgeon.wiki.git` exists and can be pushed to like a
 
 ```bash
 cd /tmp && rm -rf sls-wiki
-git clone git@github.com:AbstractsRevenge/sovereign_lane_surgeon.wiki.git sls-wiki
+git clone git@github.com:AbstractsRevenge/Sovereign_Lane_Surgeon.wiki.git sls-wiki
 cp /path/to/sovereign_lane_surgeon/wiki/*.md sls-wiki/
 cd sls-wiki && rm -f PUBLISHING.md          # this file is not a wiki page
 git add -A && git commit -m "Sync wiki from the repository" && git push

@@ -23,7 +23,7 @@ import (
 	"regexp"
 	"strings"
 
-	parser "github.com/AbstractsRevenge/sovereign_lane_surgeon/internal/blueprint/parser"
+	parser "github.com/AbstractsRevenge/Sovereign_Lane_Surgeon/internal/blueprint/parser"
 )
 
 // requalify.go — §23.1 requalifier. When a lane forks a large subtree (e.g. frameworks/base), the

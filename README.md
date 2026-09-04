@@ -17,7 +17,7 @@ limitations under the License.
 
 # sovereign-lane-surgeon
 
-[![CI](https://github.com/AbstractsRevenge/sovereign_lane_surgeon/actions/workflows/ci.yml/badge.svg)](https://github.com/AbstractsRevenge/sovereign_lane_surgeon/actions/workflows/ci.yml)
+[![CI](https://github.com/AbstractsRevenge/Sovereign_Lane_Surgeon/actions/workflows/ci.yml/badge.svg)](https://github.com/AbstractsRevenge/Sovereign_Lane_Surgeon/actions/workflows/ci.yml)
 
 
 **Seed a sovereign customization "lane" into an Android (AOSP) source tree — a parallel, first-class product variant that builds like stock, without overlays and without forking the whole tree.**
@@ -31,7 +31,7 @@ them are written up in [What a stock-seeded lane hits](#what-a-stock-seeded-lane
 next lane — or the next reader — does not rediscover them one build at a time.
 
 ```
-git clone … && cd sovereign-lane-surgeon
+git clone … && cd Sovereign_Lane_Surgeon
 go build -o sovereign-lane-surgeon .
 ./sovereign-lane-surgeon create -name myui -devices lynx -out /path/to/aosp
 ```
@@ -591,7 +591,7 @@ Licensed Apache-2.0. The vendored `internal/blueprint/parser` retains its upstre
 
 ## Documentation
 
-- **[Wiki](https://github.com/AbstractsRevenge/sovereign_lane_surgeon/wiki)** — orientation and
+- **[Wiki](https://github.com/AbstractsRevenge/Sovereign_Lane_Surgeon/wiki)** — orientation and
   task-oriented guides: quick start, how it works, verification, bundle distribution, device
   support, troubleshooting. Source in [`wiki/`](wiki/), published as described in
   [`wiki/PUBLISHING.md`](wiki/PUBLISHING.md).

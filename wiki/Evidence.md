@@ -22,7 +22,7 @@ reproducible from the repository; nothing is a summary of a summary.
 
 ## Continuous integration
 
-[![CI](https://github.com/AbstractsRevenge/sovereign_lane_surgeon/actions/workflows/ci.yml/badge.svg)](https://github.com/AbstractsRevenge/sovereign_lane_surgeon/actions/workflows/ci.yml)
+[![CI](https://github.com/AbstractsRevenge/Sovereign_Lane_Surgeon/actions/workflows/ci.yml/badge.svg)](https://github.com/AbstractsRevenge/Sovereign_Lane_Surgeon/actions/workflows/ci.yml)
 
 Every push runs the suite on a clean machine. A test count in a README is a claim; a run someone
 else can inspect is evidence, so the badge is the number that matters. Three things it proves that
@@ -126,7 +126,7 @@ a pass.
 
 Every build runs through AOSP Build Capture, whose run directory is named for its verdict, so the
 result cannot be restated more favourably than it happened. Run identifiers for every device are
-in [CURRENT_STATE.md](https://github.com/AbstractsRevenge/sovereign_lane_surgeon/blob/main/CURRENT_STATE.md).
+in [CURRENT_STATE.md](https://github.com/AbstractsRevenge/Sovereign_Lane_Surgeon/blob/main/CURRENT_STATE.md).
 
 The failures are recorded there too, including the two that cost 46 and 25 minutes before they
 were understood. They are more informative than the successes.

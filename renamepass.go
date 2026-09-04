@@ -22,7 +22,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	parser "github.com/AbstractsRevenge/sovereign_lane_surgeon/internal/blueprint/parser"
+	parser "github.com/AbstractsRevenge/Sovereign_Lane_Surgeon/internal/blueprint/parser"
 )
 
 // renamepass.go — the RENAME-model installable transform (§5/§6, T-directed "Testing1SystemUI").

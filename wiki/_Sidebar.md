@@ -28,5 +28,5 @@ limitations under the License.
 
 ---
 
-[Repository](https://github.com/AbstractsRevenge/sovereign_lane_surgeon) ·
-[CURRENT_STATE](https://github.com/AbstractsRevenge/sovereign_lane_surgeon/blob/main/CURRENT_STATE.md)
+[Repository](https://github.com/AbstractsRevenge/Sovereign_Lane_Surgeon) ·
+[CURRENT_STATE](https://github.com/AbstractsRevenge/Sovereign_Lane_Surgeon/blob/main/CURRENT_STATE.md)

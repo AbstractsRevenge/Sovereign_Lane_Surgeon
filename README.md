@@ -33,11 +33,11 @@ three devices.
 
 These phones run android-17: Google publishes CP2A factory images for all twenty devices the
 release names. What android-17's **AOSP source** does not include, is their device trees. Its
-manifest ships no Pixel phone tree at all. So you can flash Google's build onto a Pixel 7 Pro
-today, but you cannot build android-17 from AOSP source for the same phone. This toolkit closes
-that gap: it revives the tree from the last release that published it, reconciles it against the
-target by **probing the target tree** rather than carrying a patch list, and takes the vendor blobs
-and the kernel from the factory image.
+manifest ships no Pixel phone tree at all. So you can flash Google's factory stock build onto a Pixel 7 Pro 
+or other modern Pixel device today, but you cannot build android-17 from AOSP source for the same phone. 
+This toolkit closes that gap: it revives the tree from the last release that published it, 
+reconciles it against the target by **probing the target tree** rather than carrying a patch list, 
+and takes the vendor blobs and the kernel from the factory image.
 
 ## What is proven
 

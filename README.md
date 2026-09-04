@@ -32,7 +32,7 @@ three devices.
 ## The gap it closes
 
 These phones run android-17: Google publishes CP2A factory images for all twenty devices the
-release names. What android-17's **AOSP source** does not include is their device trees. Its
+release names. What android-17's **AOSP source** does not include, is their device trees. Its
 manifest ships no Pixel phone tree at all. So you can flash Google's build onto a Pixel 7 Pro
 today, but you cannot build android-17 from AOSP source for the same phone. This toolkit closes
 that gap: it revives the tree from the last release that published it, reconciles it against the

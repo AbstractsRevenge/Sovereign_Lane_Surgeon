@@ -21,21 +21,23 @@ limitations under the License.
 [![Release](https://img.shields.io/github/v/release/AbstractsRevenge/Sovereign_Lane_Surgeon)](https://github.com/AbstractsRevenge/Sovereign_Lane_Surgeon/releases/latest)
 [![License](https://img.shields.io/badge/license-Apache%202.0-blue)](LICENSE)
 
-Takes a Google Pixel factory image and produces a **buildable AOSP source tree** for that phone,
-then an image that boots on it, on a release whose AOSP source does not carry the phone's device
-tree. Go, no external AOSP 15 checkout, no hand edits, and it checks its own work at every stage.
+Sovereign Lane Surgeon takes a Google Pixel factory image and produces a **buildable AOSP source
+tree** for that phone, for a release whose AOSP source does not carry the phone's device tree, and
+then an image that boots on it. It is written in Go, needs no external AOSP 15 checkout, makes no
+hand edits, and checks its own work at every stage.
 
-**v1.0.0**, 2026-09-04: factory image to booting phone, achieved on three devices.
+**v1.0.0** (2026-09-04) is the milestone release: a factory image to a booting phone, achieved on
+three devices.
 
 ## The gap it closes
 
 These phones run android-17: Google publishes CP2A factory images for all twenty devices the
 release names. What android-17's **AOSP source** does not include is their device trees. Its
 manifest ships no Pixel phone tree at all. So you can flash Google's build onto a Pixel 7 Pro
-today, and you cannot build android-17 from AOSP source for the same phone. This closes that gap:
-revive the tree from the last release that published it, reconcile it against the target by
-**probing the target tree** rather than carrying a patch list, and take the vendor blobs and kernel
-from the factory image.
+today, but you cannot build android-17 from AOSP source for the same phone. This toolkit closes
+that gap: it revives the tree from the last release that published it, reconciles it against the
+target by **probing the target tree** rather than carrying a patch list, and takes the vendor blobs
+and the kernel from the factory image.
 
 ## What is proven
 
@@ -46,7 +48,7 @@ from the factory image.
 | The image boots a real phone | **Three devices**: cheetah (Pixel 7 Pro), panther (Pixel 7), lynx (Pixel 7a); cheetah's boot instrumented on the [Evidence](https://github.com/AbstractsRevenge/Sovereign_Lane_Surgeon/wiki/Evidence) page, 48 s to lock screen |
 
 Sixteen devices, Pixel 6 through Pixel 9a, are supported; four cp2a devices (blazer, frankel,
-mustang, rango) have no AOSP tree in any tag and cannot be. The per-device table is on the
+mustang, rango) have no AOSP tree in any tag and cannot be supported. The per-device table is on the
 [wiki's Home page](https://github.com/AbstractsRevenge/Sovereign_Lane_Surgeon/wiki); run
 identifiers are in [CURRENT_STATE.md](CURRENT_STATE.md).
 
@@ -54,14 +56,14 @@ identifiers are in [CURRENT_STATE.md](CURRENT_STATE.md).
 
 Every defect this port hit was a seed that *looked* complete and failed 25 to 46 minutes into a
 build, or at a black screen. So each stage now proves the previous one, and every check is derived
-from the tree rather than a per-device list:
+from the tree rather than from a per-device list:
 
 | Instrument | Question it answers | When |
 |---|---|---|
 | `verify-seed` | Is the seeded tree structurally sound: vendor glue reachable, blobs where their consumers name them, symlinks and executable bits intact, Blueprints parsing? | automatically, at the end of every `create -stock` |
-| `preflight` | Do the built images match the factory image: kernel release, super coverage and fit, vbmeta coverage, firmware requirements? | before flashing, exit 1 on any failure |
+| `preflight` | Do the built images match the factory image: kernel release, super coverage and fit, vbmeta coverage, firmware requirements? | before flashing; exits 1 on any failure |
 | `bundle audit` | Is the embedded bundle a faithful copy of the AOSP tree it was cut from, across every property `go:embed` can lose? | after regenerating the bundle; 9671 entries, zero divergence |
-| `compat-propose` | A full build failed: which manifest row would fix it? | reads the failure log and the target tree, writes the row |
+| `compat-propose` | A full build failed: which manifest row would fix it? | on a failed build; it reads the log and the target tree and writes the row |
 
 All three of the port's real defects are replayed against `verify-seed` in the test suite, and each
 is caught by name. Details in the wiki's
@@ -69,11 +71,12 @@ is caught by name. Details in the wiki's
 
 ## Requirements
 
-Linux x86_64, Go 1.21 or newer, an android-17 tree with AOSP's build dependencies, `debugfs`
-(e2fsprogs) so vendor extraction runs without root, and `simg2img`. A full image wants about 62 GB
-of RAM, **one build at a time**, and roughly 120 GB of output per device. Setting all of that up
-from nothing is the wiki's
-[AOSP Setup](https://github.com/AbstractsRevenge/Sovereign_Lane_Surgeon/wiki/AOSP-Setup).
+You need Linux x86_64, Go 1.21 or newer, an android-17 tree with AOSP's build dependencies,
+`debugfs` from e2fsprogs so that vendor extraction can run without root, and `simg2img`. A full
+image needs about 62 GB of RAM, **one build at a time**, and roughly 120 GB of output space per
+device. The wiki's
+[AOSP Setup](https://github.com/AbstractsRevenge/Sovereign_Lane_Surgeon/wiki/AOSP-Setup) page
+covers setting all of that up from nothing.
 
 ## Quick start
 
@@ -90,8 +93,8 @@ m nothing && m -j20 droid superimage                                            
 ./sovereign-lane-surgeon assemble-super -device cheetah -out .    # writes flash_cheetah.sh; read it, then run it
 ```
 
-The full sequence, with what each step measured on cheetah, is the wiki's
-[Quick Start](https://github.com/AbstractsRevenge/Sovereign_Lane_Surgeon/wiki/Quick-Start).
+The full sequence, with what each step measured on cheetah, is on the wiki's
+[Quick Start](https://github.com/AbstractsRevenge/Sovereign_Lane_Surgeon/wiki/Quick-Start) page.
 
 ## Subcommands
 
@@ -104,8 +107,8 @@ The full sequence, with what each step measured on cheetah, is the wiki's
 | `extract-vendor`, `assemble-kernel` | the vendor and kernel halves of `create -stock`, standalone |
 | `audit`, `verify`, `doctor` | classify a failed build against the blocker taxonomy |
 
-The lane-forking half of the repository, `create` without `-stock`, `apply`, `uninstall`,
-`requalify`, `rename-module`, `drop-dep` and `reexport`, is documented in [LANES.md](LANES.md).
+The lane-forking half of the repository (`create` without `-stock`, plus `apply`, `uninstall`,
+`requalify`, `rename-module`, `drop-dep` and `reexport`) is documented in [LANES.md](LANES.md).
 `sovereign-lane-surgeon help` prints the full usage.
 
 ## Why this repository is large
@@ -115,8 +118,8 @@ verbatim from `android-15.0.0_r36` (tegu from r31), so that reviving a device ne
 checkout. It is data, not code, and it is treated as such: content-addressed by an embedded
 manifest, audited against its source tree by `bundle audit`, and optional in the binary.
 `go build -tags nobundle` gives a 15 MB binary that fetches and verifies the bundle from a
-release archive. Details in [DESIGN.md](DESIGN.md) and the wiki's
-[Bundle Distribution](https://github.com/AbstractsRevenge/Sovereign_Lane_Surgeon/wiki/Bundle-Distribution).
+release archive. The details are in [DESIGN.md](DESIGN.md) and on the wiki's
+[Bundle Distribution](https://github.com/AbstractsRevenge/Sovereign_Lane_Surgeon/wiki/Bundle-Distribution) page.
 
 ## Releases
 
@@ -124,7 +127,7 @@ release archive. Details in [DESIGN.md](DESIGN.md) and the wiki's
 the full binary, the 15 MB slim binary, and the bundle archive with its manifest. The slim binary
 runs with `-bundle-url` pointing at the archive, fetches it once, and verifies every file against
 the manifest compiled into it. Each release is proven from the outside before it is announced: the
-published slim binary seeding a device from the published archive.
+published slim binary must seed a device from the published archive.
 
 ## Documentation
 
@@ -135,16 +138,17 @@ published slim binary seeding a device from the published archive.
 
 Adding a device already in the bundle is a factory image away; adding a new family means adding
 its tree and expecting the first full build to surface a defect or two, as every new SoC
-generation has. Both are in the wiki's
-[Device Support](https://github.com/AbstractsRevenge/Sovereign_Lane_Surgeon/wiki/Device-Support).
+generation so far has. Both are covered on the wiki's
+[Device Support](https://github.com/AbstractsRevenge/Sovereign_Lane_Surgeon/wiki/Device-Support) page.
 
 ## License
 
-Apache License 2.0, free to use, modify and redistribute; the full text is in [LICENSE](LICENSE).
-Every authored file carries `Copyright 2026 Terrance Leverette (AbstractsRevenge)` and the project line, in the form
-[androidbp_apache2_header.md](androidbp_apache2_header.md) documents, enforced by
-`licenses_test.go`. Redistributions must keep those notices and [NOTICE](NOTICE), which is how
-credit travels with the code.
+This project is licensed under the Apache License 2.0: free to use, modify and redistribute. The
+full text is in [LICENSE](LICENSE). Every authored file carries
+`Copyright 2026 Terrance Leverette (AbstractsRevenge)` and the project line, in the form that
+[androidbp_apache2_header.md](androidbp_apache2_header.md) documents and `licenses_test.go`
+enforces. Redistributions must keep those notices and [NOTICE](NOTICE), which is how credit
+travels with the code.
 
 If you build something with it, a mention is appreciated. [CITATION.cff](CITATION.cff) gives the
 form, and GitHub's "Cite this repository" button renders it.

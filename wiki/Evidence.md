@@ -49,6 +49,15 @@ AOSP's own launcher, and AOSP's own applications: Phone, Messaging, Gallery, Cam
 bar, no Play Store, no Google Mobile Services anywhere. A Pixel running Google's shipping android-17
 does not look like this. This is what a build from source looks like when it reaches the launcher.
 
+### Settings runs, and the system behind it is complete
+
+![cheetah Settings: the AOSP settings application, every category present, 495 GB free](images/cheetah-settings.png)
+
+Settings is the application most sensitive to a broken system image: every category on that
+screen is a framework service answering. Network, Bluetooth, apps, notifications, sound, display
+and storage all report, and storage reads 3% used of 512 GB, which means the formatted userdata
+partition and the encryption layer beneath it came up correctly on the first boot after the wipe.
+
 ### It is android-17, from this source, on the factory kernel
 
 ![cheetah Android version: build number aosp_cheetah-eng 17, kernel 6.1.157 ab14791245](images/cheetah-android-version.png)

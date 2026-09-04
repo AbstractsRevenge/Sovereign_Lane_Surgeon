@@ -22,7 +22,7 @@ authors:
   - family-names: Leverette
     given-names: Terrance
     alias: AbstractsRevenge
-version: 0.4.0
+version: 1.0.0
 date-released: 2026-09-04
 license: Apache-2.0
 repository-code: "https://github.com/AbstractsRevenge/Sovereign_Lane_Surgeon"

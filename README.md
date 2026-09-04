@@ -72,7 +72,7 @@ release archive. Details in [DESIGN.md](DESIGN.md) and the wiki's
 
 ## Releases
 
-[v0.4.0](https://github.com/AbstractsRevenge/Sovereign_Lane_Surgeon/releases/tag/v0.4.0) carries
+[v1.0.0](https://github.com/AbstractsRevenge/Sovereign_Lane_Surgeon/releases/tag/v1.0.0) carries
 the full binary, the slim binary, and the bundle archive with its manifest, so the slim binary can
 run with `-bundle-url` pointing at the archive.
 

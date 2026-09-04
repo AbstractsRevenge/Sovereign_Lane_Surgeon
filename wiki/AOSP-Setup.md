@@ -110,7 +110,7 @@ git clone git@github.com:AbstractsRevenge/Sovereign_Lane_Surgeon.git
 cd Sovereign_Lane_Surgeon && go build -o sovereign-lane-surgeon .
 ```
 
-Or take a binary from the [release](https://github.com/AbstractsRevenge/Sovereign_Lane_Surgeon/releases/tag/v0.4.0).
+Or take a binary from the [release](https://github.com/AbstractsRevenge/Sovereign_Lane_Surgeon/releases/tag/v1.0.0).
 Then continue with the [[Quick Start]].
 
 ## Output directories

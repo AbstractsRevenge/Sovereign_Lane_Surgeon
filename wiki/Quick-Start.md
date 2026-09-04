@@ -28,8 +28,11 @@ cd sovereign_lane_surgeon
 go build -o sovereign-lane-surgeon .
 ```
 
-The binary embeds the device trees, so it is large (about 510 MB). For CI or distribution, build
-without them and supply them at run time — see [[Bundle Distribution]].
+Or skip the build: the [v0.4.0 release](https://github.com/AbstractsRevenge/Sovereign_Lane_Surgeon/releases/tag/v0.4.0)
+carries the full binary, a 15 MB slim binary, and the bundle archive the slim one fetches.
+
+The full binary embeds the device trees, so it is large (about 490 MB). For CI or distribution,
+use the slim binary and supply the trees at run time — see [[Bundle Distribution]].
 
 ## 1. Fetch the factory image
 

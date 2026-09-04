@@ -65,7 +65,15 @@ an archive that does not match the manifests this binary was built with is refus
 ```
 
 Writes the archive and its manifest, named by bundle id. A slim binary of the same revision then
-fetches and verifies it.
+fetches and verifies it. The v0.4.0 release carries exactly this pair, so the slim binary from that
+release runs with:
+
+```bash
+-bundle-url https://github.com/AbstractsRevenge/Sovereign_Lane_Surgeon/releases/download/v0.4.0/sls-bundle-692dded8e614a01b.tar.gz
+```
+
+fetched once into the cache and verified file by file against the manifest compiled into the
+binary; an archive that does not match is refused.
 
 ## Inspecting
 

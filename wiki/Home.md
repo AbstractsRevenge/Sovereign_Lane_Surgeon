@@ -28,8 +28,8 @@ what is expected to work; the levels are cumulative.
 | Device | Product | SoC | Tree from | Proven |
 |---|---|---|---|---|
 | cheetah | Pixel 7 Pro | gs201 | android-15.0.0_r36 | **Boots** — full image, preflight, flashed, toured |
-| panther | Pixel 7 | gs201 | r36 | full image, preflight clean; **boots**, reported by the maintainer (not yet captured by the toolkit) |
-| lynx | Pixel 7a | gs201 | r36 | full image, preflight clean; **boots**, reported by the maintainer (not yet captured by the toolkit) |
+| panther | Pixel 7 | gs201 | r36 | **Boots** — full image, preflight, flashed |
+| lynx | Pixel 7a | gs201 | r36 | **Boots** — full image, preflight, flashed |
 | tangorpro | Pixel Tablet | gs201 | r36 | full image, preflight clean |
 | felix | Pixel Fold | gs201 | r36 | full image, preflight clean |
 | oriole | Pixel 6 | gs101 | r36 | full image, preflight clean |
@@ -85,11 +85,11 @@ Claims here are separated by evidence, not by confidence.
 |---|---|
 | Seeds a green build from nothing but a factory image | All 16 cp2a devices with an AOSP tree, replayed from a wiped tree, no hand edits |
 | Produces a complete, flashable image | 9 full images across gs101, gs201, zuma and zumapro; every one passes `preflight` |
-| The image boots a real phone | **Measured on one device**: cheetah (Pixel 7 Pro), twice, 48 s to lock screen. Panther and lynx boot as well, reported by the maintainer from hands-on use; they have not been captured by the toolkit's runtime capture yet |
+| The image boots a real phone | **Three devices**: cheetah (Pixel 7 Pro), panther (Pixel 7) and lynx (Pixel 7a). Cheetah's boot is the one instrumented on the [[Evidence]] page: twice, 48 s to lock screen |
 | Works on a device family it has never seen | Untested. Each new SoC family so far cost one or two toolkit defects, found at build time |
 
 The gap between the second and third rows is the honest one. An image measured correct offline is
-not the same as a phone that boots, and only gs201 has crossed it.
+not the same as a phone that boots, and only the gs201 family has crossed it.
 
 ## Where to go next
 

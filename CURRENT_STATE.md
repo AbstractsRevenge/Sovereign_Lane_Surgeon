@@ -37,9 +37,9 @@ which is the gap `create -stock` closes. **Milestone 2026-09-02 13:11 UTC: all 1
 
 | device | family / SoC | tree source | factory image | `create -stock` | `m nothing` | full build | flashed |
 |---|---|---|---|---|---|---|---|
-| panther | pantah / gs201 | r36 | CP2A.260705.006 | ✅ replayed from wiped tree | ✅ 120519Z | ✅ 153638Z full_completed | — |
+| panther | pantah / gs201 | r36 | CP2A.260705.006 | ✅ replayed from wiped tree | ✅ 120519Z | ✅ 153638Z full_completed | ✅ boots (maintainer) |
 | cheetah | pantah / gs201 | r36 | CP2A.260705.006 | ✅ | ✅ 120945Z | ✅ 152554Z full_completed (super.img); 10 attempts, each a new compat op or bundle asset: 5 libion header, 6 statsd proto, 7 sepolicy types, kernel-headers, 8 neverallows, 9 -Wno-error, 10 power HAL V6 | ✅ 01:11Z flashed with flash_cheetah.sh sequence, booted in 70 s: our eng build over the CP2A vendor blob, SELinux enforcing, /data encrypted, display/battery/wifi/adb up, orange state. Defect: main camera sensor (KRAKEN) I2C writes fail ENXIO at the hardware level → Google camera HAL restarts every 5 s (other sensor inits fine) |
-| lynx | lynx / gs201 | r36 | CP2A.260705.006 | ✅ | ✅ 121328Z | ✅ 171442Z full_completed | — |
+| lynx | lynx / gs201 | r36 | CP2A.260705.006 | ✅ | ✅ 121328Z | ✅ 171442Z full_completed | ✅ boots (maintainer) |
 | tangorpro | tangorpro / gs201 | r36 | CP2A.260705.006 | ✅ | ✅ 121701Z | ✅ 223034Z full_completed (from-scratch after the crash left corrupt intermediates) | — |
 | felix | felix / gs201 | r36 | CP2A.260705.006 | ✅ | ✅ 054324Z (re-gated) | ✅ 075845Z full_completed (-j20) | preflight FLASHABLE |
 | oriole | raviole / gs101 | r36 | CP2A.260705.006.A1 | ✅ (kernel from vendor_boot.img) | ✅ 053213Z (re-gated) | ✅ 072701Z full_completed | preflight FLASHABLE (gs101 layout: no init_boot/vendor_kernel_boot, no system_dlkm — derived from the factory image, not assumed) |

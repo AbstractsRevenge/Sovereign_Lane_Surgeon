@@ -31,3 +31,7 @@ limitations under the License.
 
 [Repository](https://github.com/AbstractsRevenge/Sovereign_Lane_Surgeon) ·
 [CURRENT_STATE](https://github.com/AbstractsRevenge/Sovereign_Lane_Surgeon/blob/main/CURRENT_STATE.md)
+
+Apache License 2.0 ·
+[LICENSE](https://github.com/AbstractsRevenge/Sovereign_Lane_Surgeon/blob/main/LICENSE) ·
+[NOTICE](https://github.com/AbstractsRevenge/Sovereign_Lane_Surgeon/blob/main/NOTICE)

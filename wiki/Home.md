@@ -111,5 +111,22 @@ A Linux host, Go, and the usual AOSP build dependencies. `debugfs` from e2fsprog
 extraction run without root. No external AOSP 15 checkout is needed: the device trees are in the
 binary, or fetched and verified on demand.
 
-Licensed under Apache 2.0. Proprietary vendor binaries are never distributed here; they come from
+## License
+
+Sovereign Lane Surgeon is licensed under the
+[Apache License 2.0](https://github.com/AbstractsRevenge/Sovereign_Lane_Surgeon/blob/main/LICENSE).
+Every authored file, these wiki pages included, carries both copyright lines:
+
+```
+Copyright 2026 The Android Open Source Project
+Copyright 2026 Sovereign Lane Surgeon
+```
+
+The device trees it redistributes belong to the Android Open Source Project, copied verbatim from
+the `android-15.0.0_r36` and `android-15.0.0_r31` tags under that same license and keeping their
+original notices;
+[NOTICE](https://github.com/AbstractsRevenge/Sovereign_Lane_Surgeon/blob/main/NOTICE) lists each.
+
+This is an independent project. It is not an official part of Android or Google, and no
+proprietary vendor binary is ever in the repository, its releases, or this wiki: those come from
 a factory image you download and accept Google's terms for.

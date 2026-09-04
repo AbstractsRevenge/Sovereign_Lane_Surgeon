@@ -52,12 +52,18 @@ func subcommandsFromMain(t *testing.T) []string {
 	return out
 }
 
+// prose is README.md plus the two reference files it points at; a subcommand or device must be
+// named in at least one of them.
+func prose(t *testing.T) string {
+	return readDoc(t, "README.md") + readDoc(t, "DESIGN.md") + readDoc(t, "LANES.md")
+}
+
 func TestDocsNameEverySubcommand(t *testing.T) {
-	readme := readDoc(t, "README.md")
+	readme := prose(t)
 	usageText := readDoc(t, "main.go")
 	for _, sc := range subcommandsFromMain(t) {
 		if !strings.Contains(readme, "`"+sc) && !strings.Contains(readme, sc+" ") && !strings.Contains(readme, sc+"`") {
-			t.Errorf("README.md does not mention subcommand %q", sc)
+			t.Errorf("README.md, DESIGN.md and LANES.md never mention subcommand %q", sc)
 		}
 		if !strings.Contains(usageText, "\n  "+sc) {
 			t.Errorf("usage() in main.go does not list subcommand %q", sc)
@@ -80,7 +86,7 @@ func TestDocsCarryTheVersion(t *testing.T) {
 // numbered list under "Target-release compatibility pass" and CURRENT_STATE's "N operations"
 // must agree with it.
 func TestDocsCountTheCompatOperations(t *testing.T) {
-	readme := readDoc(t, "README.md")
+	readme := readDoc(t, "DESIGN.md") // the operations are documented in the design reference
 	numbered := regexp.MustCompile(`(?m)^  (\d+)\. \*`).FindAllStringSubmatch(readme, -1)
 	explicit := regexp.MustCompile(`operation (\d+),`).FindAllStringSubmatch(readme, -1)
 	max := 0
@@ -94,7 +100,7 @@ func TestDocsCountTheCompatOperations(t *testing.T) {
 		}
 	}
 	if max != targetCompatOperations {
-		t.Errorf("README.md documents operations up to %d, code runs %d", max, targetCompatOperations)
+		t.Errorf("DESIGN.md documents operations up to %d, code runs %d", max, targetCompatOperations)
 	}
 	state := readDoc(t, "CURRENT_STATE.md")
 	want := strings.TrimSpace(strings.Replace(" N operations", "N", itoa(targetCompatOperations), 1))
@@ -105,13 +111,13 @@ func TestDocsCountTheCompatOperations(t *testing.T) {
 
 func TestDocsListEveryFactoryDevice(t *testing.T) {
 	state := readDoc(t, "CURRENT_STATE.md")
-	readme := readDoc(t, "README.md")
+	readme := prose(t)
 	for _, e := range factoryImageManifest {
 		if !strings.Contains(state, "| "+e.Device+" ") {
 			t.Errorf("CURRENT_STATE.md coverage table has no row for %s", e.Device)
 		}
 		if !strings.Contains(readme, e.Device) {
-			t.Errorf("README.md never mentions %s", e.Device)
+			t.Errorf("README.md, DESIGN.md and LANES.md never mention %s", e.Device)
 		}
 	}
 }

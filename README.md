@@ -46,11 +46,13 @@ and takes the vendor blobs and the kernel from the factory image.
 | Seeds a green build from a factory image | All 16 cp2a devices with an AOSP tree, replayed from a wiped tree, no hand edits |
 | Produces a complete, flashable image | 9 full images across gs101, gs201, zuma and zumapro; every one passes `preflight` |
 | The image boots a real phone | **Three devices**: cheetah (Pixel 7 Pro), panther (Pixel 7), lynx (Pixel 7a); cheetah's boot instrumented on the [Evidence](https://github.com/AbstractsRevenge/Sovereign_Lane_Surgeon/wiki/Evidence) page, 48 s to lock screen |
+| Cannot be supported | blazer, frankel, mustang, rango: four cp2a devices with factory images but no AOSP device tree in any tag, so there is nothing to revive |
 
-Sixteen devices, Pixel 6 through Pixel 9a, are supported; four cp2a devices (blazer, frankel,
-mustang, rango) have no AOSP tree in any tag and cannot be supported. The per-device table is on the
-[wiki's Home page](https://github.com/AbstractsRevenge/Sovereign_Lane_Surgeon/wiki); run
-identifiers are in [CURRENT_STATE.md](CURRENT_STATE.md).
+The gap between the second and third rows is the honest one. `preflight` is necessary for a boot,
+not sufficient: it measures files, not behaviour, and six of the nine images have never been on a
+phone. Sixteen devices, Pixel 6 through Pixel 9a, are supported at the first level; the
+per-device table is on the [wiki's Home page](https://github.com/AbstractsRevenge/Sovereign_Lane_Surgeon/wiki),
+and run identifiers are in [CURRENT_STATE.md](CURRENT_STATE.md).
 
 ## The name, and the other half
 
@@ -94,8 +96,10 @@ is caught by name. Details in the wiki's
 
 You need Linux x86_64, Go 1.21 or newer, an android-17 tree with AOSP's build dependencies,
 `debugfs` from e2fsprogs so that vendor extraction can run without root, and `simg2img`. A full
-image needs about 62 GB of RAM, **one build at a time**, and roughly 120 GB of output space per
-device. The wiki's
+image needs roughly 120 GB of output space per device and, on the 62 GB machine the port was done
+on, **one build at a time**. That limit is AOSP's, not the toolkit's: the surgeon itself finishes
+in seconds and nothing of it runs during a build, but one `m -j16 droid` measured about 47 GB in
+use, and two of them plus an analysis gate exhausted the machine. The wiki's
 [AOSP Setup](https://github.com/AbstractsRevenge/Sovereign_Lane_Surgeon/wiki/AOSP-Setup) page
 covers setting all of that up from nothing.
 
@@ -124,7 +128,7 @@ The full sequence, with what each step measured on cheetah, is on the wiki's
 | `fetch-factory-image` | download and extract a factory image from a hand-verified manifest; refuses until Google's terms are accepted |
 | `create -stock` | revive a device: mirror its trees, assemble the kernel, wire the blobs, run the compatibility pass, verify |
 | `verify-seed`, `preflight`, `bundle`, `compat-propose` | the instruments above |
-| `assemble-super` | write the flash script; pack prebuilt partitions for a tree seeded before the vendor-glue fix |
+| `assemble-super` | write the flash script; also packs the prebuilt partitions for a tree seeded before the vendor-glue fix of 2026-09-03, a fallback that is slated for removal once no such tree remains |
 | `extract-vendor`, `assemble-kernel` | the vendor and kernel halves of `create -stock`, standalone |
 | `audit`, `verify`, `doctor` | classify a failed build against the blocker taxonomy |
 

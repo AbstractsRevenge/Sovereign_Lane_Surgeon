@@ -40,6 +40,11 @@ import (
 //     step reports "nothing to add" and only writes the flash script. It remains the fallback
 //     for a tree revived before the fix: the build's build_super_image with the build's
 //     misc_info.txt plus the prebuilt images.
+//
+//     EXPIRY: the packing path exists only for trees seeded before 2026-09-03, when verify-seed
+//     began failing any seed whose glue is unreachable. Remove planSuperAssembly's prebuilt
+//     branch (keep the script) once every tree in CURRENT_STATE.md postdates that fix; a
+//     "nothing to add" result on every device is the signal.
 //   - Three more facts the flash needs, each learned from a failed boot: vbmeta must go on
 //     exactly as the build signed it (`fastboot --disable-verification` rewrites the flags in
 //     flight, breaks the signature, and this bootloader then hands init no androidboot.vbmeta.*

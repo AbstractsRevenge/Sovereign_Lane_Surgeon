@@ -75,7 +75,7 @@ func TestRunRelocateStockSourcePaths_BothRootsAndProducer(t *testing.T) {
 		`#include "frameworks/proto_logging/stats/atoms.pb.h"`, // keep stock — producer not forked
 	}, "\n")+"\n")
 
-	_, moved, kept := runRelocateStockSourcePaths(LaneConfig{Name: lane}, root)
+	_, moved, kept, _ := runRelocateStockSourcePaths(LaneConfig{Name: lane}, root)
 	// 2 .proto imports + 2 generated-header includes relocate; 2 references have no lane
 	// producer and correctly stay stock. (First written as 5 — the assertion was wrong, not the
 	// code. Checking the fixture against the reader's actual output before suspecting the
@@ -263,5 +263,58 @@ func TestDiscoverNeverAllowSites_FirstLane(t *testing.T) {
 	}
 	if _, again, _ := PatchNeverallowLanePaths(out, "holo"); again {
 		t.Errorf("second pass changed the file — not idempotent")
+	}
+}
+
+// TestRunRelocateStockSourcePaths_RevertsDanglingLaneRefs pins the reverse direction (2026-09-05,
+// android-17 landing): a reference ALREADY carrying the lane spelling whose lane parallel does not
+// exist must go back to stock — `import "frameworks-holo/proto_logging/…"` inherited from a 15
+// checkpoint that once forked proto_logging failed protoc inside sbox on 17, thousands of ninja
+// steps from the edit. Three cases: revert (stock has it, lane does not), keep-lane (lane has it),
+// and leave-alone (neither side has it — the census's business, not a guess).
+func TestRunRelocateStockSourcePaths_RevertsDanglingLaneRefs(t *testing.T) {
+	root := t.TempDir()
+	lane := "aurora"
+	mk := func(rel, body string) {
+		p := filepath.Join(root, rel)
+		if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(p, []byte(body), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	mk("frameworks/proto_logging/stats/enums/os/enums.proto", "syntax = \"proto2\";")              // stock only
+	mk("frameworks-aurora/base/core/proto/android/os/looper.proto", "syntax = \"proto2\";")        // lane has it
+	mk("frameworks-aurora/base/core/proto/android/server/pm.proto", strings.Join([]string{
+		`syntax = "proto2";`,
+		`import "frameworks-aurora/proto_logging/stats/enums/os/enums.proto";`, // dangling lane → revert
+		`import "frameworks-aurora/base/core/proto/android/os/looper.proto";`,  // lane parallel exists → keep
+		`import "frameworks-aurora/nowhere/gone.proto";`,                       // dangling on both sides → leave
+		`import "frameworks/base/core/proto/android/os/looper.proto";`,          // stock spelling, lane exists → forward relocate
+	}, "\n"))
+	_, moved, _, reverted := runRelocateStockSourcePaths(LaneConfig{Name: lane}, root)
+	if moved != 1 || reverted != 1 {
+		t.Fatalf("moved=%d reverted=%d, want 1 and 1", moved, reverted)
+	}
+	got, _ := os.ReadFile(filepath.Join(root, "frameworks-aurora/base/core/proto/android/server/pm.proto"))
+	want := strings.Join([]string{
+		`syntax = "proto2";`,
+		`import "frameworks/proto_logging/stats/enums/os/enums.proto";`,
+		`import "frameworks-aurora/base/core/proto/android/os/looper.proto";`,
+		`import "frameworks-aurora/nowhere/gone.proto";`,
+		`import "frameworks-aurora/base/core/proto/android/os/looper.proto";`,
+	}, "\n")
+	if string(got) != want {
+		t.Errorf("after pass:\n%s\nwant:\n%s", got, want)
+	}
+	// idempotent: a second run changes nothing
+	if _, m2, _, r2 := runRelocateStockSourcePaths(LaneConfig{Name: lane}, root); m2 != 0 || r2 != 0 {
+		t.Errorf("second run moved=%d reverted=%d, want 0/0", m2, r2)
+	}
+	// the reverse regexp keeps group numbering and never matches a longer lane name
+	re := laneRelocRe(stockRelocSpecs[0].re, "aurora")
+	if re.NumSubexp() != 4 || re.MatchString(`import "frameworks-aurora2/x.proto";`) {
+		t.Errorf("laneRelocRe shape wrong: %s", re)
 	}
 }

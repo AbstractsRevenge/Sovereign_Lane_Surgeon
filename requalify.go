@@ -610,8 +610,22 @@ var stockRelocSpecs = []stockRelocSpec{
 // runRelocateStockSourcePaths applies every spec across the lane trees. Used by `create` WITHOUT
 // -from, and by `requalify -sources` without -from. Blueprint files are NOT touched here — they go
 // through requalify (labels) and `requalify -paths` (bare + embedded paths), which are AST-safe.
-func runRelocateStockSourcePaths(c LaneConfig, outRoot string) (changed, moved, kept int) {
+//
+// The pass runs in BOTH directions, under the same guard:
+//
+//	stock → lane   `frameworks/x`       becomes `frameworks-<lane>/x` when the lane parallel exists
+//	lane  → stock  `frameworks-<lane>/x` becomes `frameworks/x`       when it does NOT (and stock has it)
+//
+// The reverse direction exists because a lane-spelled reference can outlive its target: the
+// android-17 landing inherited `import "frameworks-holo/proto_logging/…"` from a 15 checkpoint
+// whose lane once forked proto_logging, and a three-way delta spread it into 17-changed protos
+// while the 17 lane never forked that directory. protoc then fails inside sbox ("File not found")
+// thousands of ninja steps after the edit. A path with no lane parallel MUST point at stock — the
+// forward rule says so — and the pass now enforces it for references that already carry the lane
+// spelling, so `requalify -sources` is idempotent and repairs as well as relocates.
+func runRelocateStockSourcePaths(c LaneConfig, outRoot string) (changed, moved, kept, reverted int) {
 	laneRoot := map[string]string{"frameworks": "frameworks-" + c.Name, "packages": "packages-" + c.Name}
+	stockRoot := map[string]string{"frameworks-" + c.Name: "frameworks", "packages-" + c.Name: "packages"}
 	exists := map[string]bool{}
 	has := func(rel string) bool {
 		if v, ok := exists[rel]; ok {
@@ -621,13 +635,17 @@ func runRelocateStockSourcePaths(c LaneConfig, outRoot string) (changed, moved, 
 		exists[rel] = err == nil
 		return err == nil
 	}
-	fmt.Printf("\nrelocate STOCK paths in NON-bp sources (existence-guarded, producer-aware):\n")
+	fmt.Printf("\nrelocate STOCK paths in NON-bp sources (existence-guarded, producer-aware, both directions):\n")
 	for _, spec := range stockRelocSpecs {
 		want := map[string]bool{}
 		for _, e := range spec.exts {
 			want[e] = true
 		}
-		specMoved, specFiles := 0, 0
+		// The reverse form of the same spec: the root alternation swapped for the lane roots. The
+		// specs are written with the literal group `(frameworks|packages)` so this substitution is
+		// exact; laneRelocRe pins that assumption.
+		revRe := laneRelocRe(spec.re, c.Name)
+		specMoved, specFiles, specReverted := 0, 0, 0
 		for _, root := range []string{"frameworks-" + c.Name, "packages-" + c.Name} {
 			rootDir := filepath.Join(outRoot, root)
 			if fi, err := os.Stat(rootDir); err != nil || !fi.IsDir() {
@@ -652,8 +670,23 @@ func runRelocateStockSourcePaths(c LaneConfig, outRoot string) (changed, moved, 
 					n++
 					return []byte(string(g[1]) + lane + string(g[4]))
 				})
-				if n > 0 && os.WriteFile(p, out, fi.Mode().Perm()) == nil {
+				r := 0
+				out = revRe.ReplaceAllFunc(out, func(m []byte) []byte {
+					g := revRe.FindSubmatch(m)
+					laneR, path := string(g[2]), string(g[3])
+					if has(laneR + "/" + spec.producer(path)) {
+						return m // lane parallel exists — the lane spelling is right
+					}
+					stock := stockRoot[laneR] + "/" + path
+					if !has(stockRoot[laneR] + "/" + spec.producer(path)) {
+						return m // dangling on BOTH sides — not ours to guess; the census reports it
+					}
+					r++
+					return []byte(string(g[1]) + stock + string(g[4]))
+				})
+				if n+r > 0 && os.WriteFile(p, out, fi.Mode().Perm()) == nil {
 					specMoved += n
+					specReverted += r
 					specFiles++
 					changed++
 				}
@@ -661,10 +694,24 @@ func runRelocateStockSourcePaths(c LaneConfig, outRoot string) (changed, moved, 
 			})
 		}
 		moved += specMoved
-		fmt.Printf("  %-26s %4d reference(s) in %d file(s)\n", spec.name, specMoved, specFiles)
+		reverted += specReverted
+		fmt.Printf("  %-26s %4d reference(s) relocated, %d reverted to stock, in %d file(s)\n", spec.name, specMoved, specReverted, specFiles)
 	}
-	fmt.Printf("  %d left stock (no lane parallel — correct, NOT a miss).\n", kept)
-	return changed, moved, kept
+	fmt.Printf("  %d left stock (no lane parallel — correct, NOT a miss); %d lane-spelled reference(s) reverted (no lane parallel).\n", kept, reverted)
+	return changed, moved, kept, reverted
+}
+
+// laneRelocRe derives the reverse-direction regexp of a stockRelocSpec: the literal root
+// alternation `(frameworks|packages)` becomes `(frameworks-<lane>|packages-<lane>)`, everything
+// else identical, so group numbering is preserved (1=lead 2=root 3=path 4=trail).
+func laneRelocRe(stock *regexp.Regexp, lane string) *regexp.Regexp {
+	src := stock.String()
+	const alt = "(frameworks|packages)"
+	if !strings.Contains(src, alt) {
+		panic("stockRelocSpec regexp must carry the literal root alternation " + alt + ": " + src)
+	}
+	return regexp.MustCompile(strings.Replace(src, alt,
+		"(frameworks-"+regexp.QuoteMeta(lane)+"|packages-"+regexp.QuoteMeta(lane)+")", 1))
 }
 
 // exportPairs maps each cc export-headers property to the library lists Soong checks it against

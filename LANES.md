@@ -454,3 +454,6 @@ the hazard.
 
 Licensed Apache-2.0. The vendored `internal/blueprint/parser` retains its upstream Apache-2.0 headers.
 
+## undefined-deps
+
+`undefined-deps -name <lane> -out <root> [-fail]` is the AST census of every dependency name the lane's Android.bp files reference that nothing will define once the finder has routed the lane: stock parallels of lane bps are excluded (the finder drops them), and so are the bps the route manifest drops. It exists because Soong reports "depends on undefined module" one or two at a time and each report costs a full analysis run; landing a lane whose delta came from another Android version (the Holo lane on android-17) surfaces a whole class at once: prebuilts the source tree carried outside the lane, modules a conflicted bp still names by an old name, libraries the lane renamed. Diagnostic by default; `-fail` makes it a gate.

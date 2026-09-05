@@ -80,6 +80,8 @@ func main() {
 		os.Exit(cmdDropDep(args))
 	case "reexport":
 		os.Exit(cmdReexport(args))
+	case "undefined-deps":
+		os.Exit(cmdUndefinedDeps(args))
 	case "doctor":
 		os.Exit(cmdDoctor(args))
 	case "fetch-factory-image":
@@ -153,6 +155,10 @@ SUBCOMMANDS:
                                drops a full-replacement identity app, re-emit the keep-name modules it
                                exported that the surviving graph still references (AST-detected;
                                dry-run plan unless -apply).
+  undefined-deps -name <l> -out <r> [-fail]  AST census of every dependency name the lane's bps reference that
+                               nothing will define once the finder routes the lane (stock parallels of lane
+                               bps and manifest-dropped bps excluded). Lists the whole class at once instead of
+                               one "depends on undefined module" per Soong run.
   doctor  -report <dir|json>   Per classified failure, print (or apply) its recipe (§23.2).
   fetch-factory-image -device <name> -out <dir>  Download+extract a Google Pixel factory image
                                (known: the 16 cp2a devices with an AOSP tree — Pixel 6 … Pixel 9a) from a hand-verified

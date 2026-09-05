@@ -368,7 +368,12 @@ func droppedStockParallelBps(c LaneConfig, outRoot string) map[string]bool {
 }
 
 // depNamesInBp collects every bare-name / :name dep referenced by a bp's dep-name + srcs-ref lists.
-func depNamesInBp(path string, into map[string]bool) {
+func depNamesInBp(path string, into map[string]bool) { depNamesInBpOpt(path, into, true) }
+
+// depNamesInBpOpt is depNamesInBp with bareSrcs=false restricting srcs-class properties to their
+// `:module` references (a file path or glob is not a dependency NAME). The re-export scan keeps the
+// permissive form; the undefined-deps census needs the strict one.
+func depNamesInBpOpt(path string, into map[string]bool, bareSrcs bool) {
 	b, err := os.ReadFile(path)
 	if err != nil {
 		return
@@ -381,29 +386,32 @@ func depNamesInBp(path string, into map[string]bool) {
 	// plain list but LIST + SELECT/OPERATOR CONCATENATIONS (e.g. device_common_srcs: [...] + select(...)),
 	// which is how the framework source aggregator references :PacProcessor-aidl-sources et al. Missing
 	// the Operator/Select recursion silently drops every ref past the first list (referenced=false).
-	var walkExpr func(parser.Expression)
-	walkExpr = func(e parser.Expression) {
+	var walkExpr func(parser.Expression, bool)
+	walkExpr = func(e parser.Expression, srcsProp bool) {
 		switch v := e.(type) {
 		case *parser.String:
+			if srcsProp && !bareSrcs && !strings.HasPrefix(v.Value, ":") {
+				return // a file path / glob in a srcs-class property is not a module name
+			}
 			s := strings.TrimPrefix(v.Value, ":")
 			if s != "" && !strings.HasPrefix(s, "//") {
 				into[s] = true
 			}
 		case *parser.List:
 			for _, el := range v.Values {
-				walkExpr(el)
+				walkExpr(el, srcsProp)
 			}
 		case *parser.Operator:
-			walkExpr(v.Args[0])
-			walkExpr(v.Args[1])
+			walkExpr(v.Args[0], srcsProp)
+			walkExpr(v.Args[1], srcsProp)
 		case *parser.Select:
 			for _, cs := range v.Cases {
 				if cs != nil {
-					walkExpr(cs.Value)
+					walkExpr(cs.Value, srcsProp)
 				}
 			}
 			if v.Append != nil {
-				walkExpr(v.Append)
+				walkExpr(v.Append, srcsProp)
 			}
 		}
 	}
@@ -438,7 +446,7 @@ func depNamesInBp(path string, into map[string]bool) {
 					into[s.Value] = true
 				}
 			case isDepRefProp(pr.Name):
-				walkExpr(pr.Value)
+				walkExpr(pr.Value, srcsRefProps[pr.Name] || pr.Name == "data")
 			default:
 				// Not a dep prop itself — descend in case it CONTAINS one (nested conditional/variant map).
 				walkContainers(pr.Value)

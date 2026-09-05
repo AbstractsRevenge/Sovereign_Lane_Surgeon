@@ -224,4 +224,22 @@ func TestMirrorExportHeaders(t *testing.T) {
 	if mirrorExportHeaders(m) {
 		t.Errorf("second pass changed the module — not idempotent")
 	}
+	// Reverse direction: qualified export against a bare library entry (a merge that took
+	// upstream's shared_libs) — the library entry takes the qualified form.
+	rev := "cc_library {\n    name: \"y\",\n    shared_libs: [\"libstagefright_bufferpool@2.0.1\"],\n    export_shared_lib_headers: [\"//frameworks-holo/av/media/module/bufferpool/2.0:libstagefright_bufferpool@2.0.1\"],\n}\n"
+	f2, errs2 := parser.Parse("", strings.NewReader(rev))
+	if len(errs2) > 0 {
+		t.Fatal(errs2[0])
+	}
+	m2 := f2.Defs[0].(*parser.Module)
+	if !mirrorExportHeaders(m2) {
+		t.Fatal("reverse case: expected a change")
+	}
+	for _, p := range m2.Properties {
+		if p.Name == "shared_libs" {
+			if s := p.Value.(*parser.List).Values[0].(*parser.String).Value; !strings.HasPrefix(s, "//") {
+				t.Errorf("reverse case: shared_libs entry not qualified: %s", s)
+			}
+		}
+	}
 }

@@ -717,15 +717,23 @@ func mirrorExportHeaders(m *parser.Module) bool {
 			delete(qualified, k)
 		}
 		collect(m.Properties, names)
+		// The reverse direction: a qualified EXPORT entry (the lane's form) against a bare library
+		// entry (upstream's form) after a merge that went the other way. Collect from the export
+		// list too, then harmonize BOTH lists onto the qualified form.
+		collect(m.Properties, map[string]bool{exportProp: true})
 		if len(qualified) == 0 {
 			continue
+		}
+		targets := map[string]bool{exportProp: true}
+		for _, lp := range libProps {
+			targets[lp] = true
 		}
 		var fix func(props []*parser.Property)
 		fix = func(props []*parser.Property) {
 			for _, p := range props {
 				switch v := p.Value.(type) {
 				case *parser.List:
-					if p.Name != exportProp {
+					if !targets[p.Name] {
 						continue
 					}
 					for _, el := range v.Values {

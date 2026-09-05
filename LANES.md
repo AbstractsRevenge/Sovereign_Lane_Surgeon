@@ -457,3 +457,34 @@ Licensed Apache-2.0. The vendored `internal/blueprint/parser` retains its upstre
 ## undefined-deps
 
 `undefined-deps -name <lane> -out <root> [-fail]` is the AST census of every dependency name the lane's Android.bp files reference that nothing will define once the finder has routed the lane: stock parallels of lane bps are excluded (the finder drops them), and so are the bps the route manifest drops. It exists because Soong reports "depends on undefined module" one or two at a time and each report costs a full analysis run; landing a lane whose delta came from another Android version (the Holo lane on android-17) surfaces a whole class at once: prebuilts the source tree carried outside the lane, modules a conflicted bp still names by an old name, libraries the lane renamed. Diagnostic by default; `-fail` makes it a gate.
+
+## Symlinks and Kotlin twins on android-17 (learned 2026-09-05, Holo lane on android-17.0.0_r1)
+
+**Symlinks are opaque to Soong's finder and must stay symlinks in a lane.** android-17 stock carries
+1,807 symlinks under `frameworks/` and `packages/` (1,700 to directories; 1,412 of them in
+`packages/apps/CellBroadcastReceiver`, the rest in `frameworks/native/{include,libs}`, Car,
+CellBroadcastService, Wifi, Connectivity). Seven directory symlinks point at a directory that holds an
+`Android.bp`: WindowManager Shell's `multivalentTestsForDevice`, `multivalentTestsForDeviceless` and
+`multivalentScreenshotTestsForDevice` (all to the unsuffixed sibling), Launcher3's
+`tests/multivalentTestsForDevice`, `packages/modules/Virtualization/apex -> build/apex`,
+`packages/services/Telephony/ecc/proto`, and the ThemePicker/WallpaperPicker2 robolectric `module`
+links. The finder does not descend a symlinked directory, which is the only reason stock does not
+define those modules three times. `mirrorSubtree` recreates every symlink as a symlink (relative
+targets stay valid). Any later step that copies into a lane — absorbing upstream additions, restoring
+a shed path, merging a delta — must do the same: `rsync -a` without a trailing slash on the link, or
+`cp -P`. A trailing-slash rsync of a symlinked directory dereferences it into a real copy, and the lane
+then defines every module in it twice. Gate 12 on android-17 lost ten modules to exactly this.
+
+**Kotlin twin directories are KSS's, not the lane's.** A `kotlin/` directory beside a stock `java/`
+whose files have `.java` counterparts (frameworks/opt/vcard, the stats VTS tests) is a Kotlin Release
+Sovereignty twin from the android-15 lane. It must not be carried into a fresh lane: with the java bp
+removed, stock's java bp loads and collides with the twin's bp. KSS re-creates the twins when the
+`-kotlin` release is installed on the target. Stock's own `kotlin/` directories (SystemUI's
+`util/kotlin`, Music) and Holo's own Kotlin libraries under `libs/androidx/compose/*/src/main/kotlin`
+are not twins and stay.
+
+**Path mapping is root-anchored only.** `frameworks/base/packages/SystemUI` maps to
+`frameworks-holo/base/packages/SystemUI`; a bare `packages/ -> packages-holo/` replace rewrites the
+interior segment and creates a phantom `frameworks-holo/base/packages-holo/` tree that defines every
+module a second time. requalify's `requalifyEmbedded` guard exists for this; scripts outside the
+toolkit must use the same root-anchored mapping.

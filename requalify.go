@@ -321,6 +321,9 @@ func requalifyFileCfg(path, outRoot string, laneMap map[string]string, cache map
 			for _, p := range d.Properties {
 				walk(p.Value)
 			}
+			if mirrorExportHeaders(d) {
+				changed = true
+			}
 		case *parser.Assignment:
 			walk(d.Value)
 		}
@@ -662,4 +665,83 @@ func runRelocateStockSourcePaths(c LaneConfig, outRoot string) (changed, moved, 
 	}
 	fmt.Printf("  %d left stock (no lane parallel — correct, NOT a miss).\n", kept)
 	return changed, moved, kept
+}
+
+// exportPairs maps each cc export-headers property to the library lists Soong checks it against
+// (build/soong/cc/cc.go: "Shared library not in shared_libs" and its static/header twins). The
+// check is a TEXTUAL inList over the two property values, so an export entry must carry the exact
+// same string as its library entry — a qualified //dir:name label in shared_libs paired with the
+// bare name in export_shared_lib_headers is a PropertyErrorf, on 15 and 17 alike.
+var exportPairs = map[string][]string{
+	"export_shared_lib_headers": {"shared_libs"},
+	"export_static_lib_headers": {"static_libs", "whole_static_libs"},
+	"export_header_lib_headers": {"header_libs"},
+}
+
+// mirrorExportHeaders keeps a module's export_*_headers entries in the same form as the library
+// entries they name: when a library list (at any nesting — target/arch/product_variables maps)
+// carries the qualified label //dir:name and the export list carries the bare name, the export
+// entry is rewritten to the label. The Holo lane qualifies library deps for sovereignty
+// (`//frameworks-holo/av/media/module/bufferpool/2.0:libstagefright_bufferpool@2.0.1`); a
+// three-way merge that takes upstream's bare export list against the lane's qualified library
+// list produced exactly the mismatch (android-17 landing, codec2/hal/aidl, 2026-09-05). Idempotent.
+func mirrorExportHeaders(m *parser.Module) bool {
+	// qualified[bare] = label, collected from every library list in the module, nested or not.
+	qualified := map[string]string{}
+	var collect func(props []*parser.Property, names map[string]bool)
+	collect = func(props []*parser.Property, names map[string]bool) {
+		for _, p := range props {
+			switch v := p.Value.(type) {
+			case *parser.List:
+				if names[p.Name] {
+					for _, el := range v.Values {
+						if s, ok := el.(*parser.String); ok && strings.HasPrefix(s.Value, "//") {
+							if i := strings.LastIndexByte(s.Value, ':'); i > 0 {
+								qualified[s.Value[i+1:]] = s.Value
+							}
+						}
+					}
+				}
+			case *parser.Map:
+				collect(v.Properties, names)
+			}
+		}
+	}
+	changed := false
+	for exportProp, libProps := range exportPairs {
+		names := map[string]bool{}
+		for _, lp := range libProps {
+			names[lp] = true
+		}
+		for k := range qualified {
+			delete(qualified, k)
+		}
+		collect(m.Properties, names)
+		if len(qualified) == 0 {
+			continue
+		}
+		var fix func(props []*parser.Property)
+		fix = func(props []*parser.Property) {
+			for _, p := range props {
+				switch v := p.Value.(type) {
+				case *parser.List:
+					if p.Name != exportProp {
+						continue
+					}
+					for _, el := range v.Values {
+						if s, ok := el.(*parser.String); ok {
+							if q, hit := qualified[s.Value]; hit && q != s.Value {
+								s.Value = q
+								changed = true
+							}
+						}
+					}
+				case *parser.Map:
+					fix(v.Properties)
+				}
+			}
+		}
+		fix(m.Properties)
+	}
+	return changed
 }

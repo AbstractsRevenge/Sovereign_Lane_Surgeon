@@ -16,6 +16,7 @@
 package main
 
 import (
+	parser "github.com/AbstractsRevenge/Sovereign_Lane_Surgeon/internal/blueprint/parser"
 	"os"
 	"path/filepath"
 	"strings"
@@ -184,5 +185,43 @@ func TestRequalifyEmbeddedLabels(t *testing.T) {
 		if got := requalifyEmbeddedLabels(c.in, root, m, cache, false, ""); got != c.want {
 			t.Errorf("requalifyEmbeddedLabels(%q)\n got %q\nwant %q", c.in, got, c.want)
 		}
+	}
+}
+
+// TestMirrorExportHeaders pins the paired-property rule: an export_*_headers entry must carry the
+// exact string of its library entry, so a qualified shared_libs label mirrors onto the bare export
+// entry (Soong's inList check is textual). Nested library lists are seen; unrelated names and an
+// already-mirrored file are untouched.
+func TestMirrorExportHeaders(t *testing.T) {
+	src := "cc_library {\n    name: \"x\",\n    target: {\n        android: {\n            shared_libs: [\"//frameworks-holo/av/media/module/bufferpool/2.0:libstagefright_bufferpool@2.0.1\", \"libui\"],\n        },\n    },\n    export_shared_lib_headers: [\"libstagefright_bufferpool@2.0.1\", \"libui\"],\n    static_libs: [\"//a/b:libfoo\"],\n    export_static_lib_headers: [\"libfoo\", \"libbar\"],\n}\n"
+	file, errs := parser.Parse("", strings.NewReader(src))
+	if len(errs) > 0 {
+		t.Fatal(errs[0])
+	}
+	m := file.Defs[0].(*parser.Module)
+	if !mirrorExportHeaders(m) {
+		t.Fatal("expected a change")
+	}
+	lists := map[string][]string{}
+	for _, p := range m.Properties {
+		if l, ok := p.Value.(*parser.List); ok {
+			for _, el := range l.Values {
+				if s, ok := el.(*parser.String); ok {
+					lists[p.Name] = append(lists[p.Name], s.Value)
+				}
+			}
+		}
+	}
+	want := map[string][]string{
+		"export_shared_lib_headers": {"//frameworks-holo/av/media/module/bufferpool/2.0:libstagefright_bufferpool@2.0.1", "libui"},
+		"export_static_lib_headers": {"//a/b:libfoo", "libbar"},
+	}
+	for prop, w := range want {
+		if strings.Join(lists[prop], ",") != strings.Join(w, ",") {
+			t.Errorf("%s = %v, want %v", prop, lists[prop], w)
+		}
+	}
+	if mirrorExportHeaders(m) {
+		t.Errorf("second pass changed the module — not idempotent")
 	}
 }

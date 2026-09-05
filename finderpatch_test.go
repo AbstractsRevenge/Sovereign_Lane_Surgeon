@@ -211,3 +211,30 @@ func TestKeepNameApplyEmitsNamespaceCollapse(t *testing.T) {
 		t.Errorf("generated keep-name block does not compile: %v", err)
 	}
 }
+
+// TestGenFinderLaneFuncs_SoleLaneAndKeptStock pins two template properties: with no sibling lanes the
+// other-lane rule emits no component loop (a loop over an unused `comp` is a Go compile error — the
+// first-lane case holo-adopt hit), and the keep-name apply honors the manifest's kept_stock_bp_paths so
+// an additive lane dir (monet-holo beside stock monet) keeps its stock parallel.
+func TestGenFinderLaneFuncs_SoleLaneAndKeptStock(t *testing.T) {
+	c := deriveLane("holo", true, nil, false, false, "")
+	sole, err := genFinderLaneFuncs(c, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(sole, "for _, comp := range") {
+		t.Errorf("sole-lane finder block must not emit the component loop:\n%s", sole)
+	}
+	for _, want := range []string{"KeptStockBpPaths", "keptStock[kept] = true", `&& !keptStock[stock]`} {
+		if !strings.Contains(sole, want) {
+			t.Errorf("keep-name finder block lacks %q", want)
+		}
+	}
+	multi, err := genFinderLaneFuncs(c, []string{"-nexusm"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(multi, "for _, comp := range") || !strings.Contains(multi, `"-nexusm"`) {
+		t.Errorf("multi-lane finder block must loop over components with the sibling suffix")
+	}
+}

@@ -42,6 +42,11 @@ type finderTmplData struct {
 	DirSuffix   string // "-aurora"
 	DirPrefix   string // "AuroraM"-style identity-app dir/module prefix (rename model); "" for keep-name
 	SuffixChain string // pre-built "strings.HasSuffix(comp, \"-holo\") || ..." (tabs handled by gofmt)
+	// HasOtherLanes is true iff there is at least one sibling lane to be blind to. When false (the
+	// first lane on a fresh tree — the native Holo Lanes adoption case), isOtherLaneBpFor<Lane> must
+	// omit its component loop entirely: a "for _, comp := range … { if false {…} }" body leaves comp
+	// declared-and-unused, which is a Go compile error. (Ported from holo-adopt, 2026-09-05.)
+	HasOtherLanes bool
 }
 
 // finderSharedTmpl = the funcs common to BOTH lane models: detection, manifest struct + loader,
@@ -64,6 +69,11 @@ var finderSharedTmpl = template.Must(template.New("findershared").Parse(
 		"type {{.Lane}}BpRouteManifest struct {\n" +
 		"\tDroppedNamespaceDeclPaths []string `json:\"dropped_namespace_decl_paths\"`\n" +
 		"\tAddedNamespaceDeclPaths   []string `json:\"added_namespace_decl_paths\"`\n" +
+		"\t// KeptStockBpPaths are stock bps whose lane parallel is ADDITIVE (the lane defines new names,\n" +
+		"\t// e.g. monet-holo beside stock's monet; HoloDeskClock beside DeskClock) — keeping the stock bp\n" +
+		"\t// cannot collide and dropping it loses modules the tree still references. Written by\n" +
+		"\t// `govern route-curate` (UX Design Governance); honored here so the two toolkits share one manifest.\n" +
+		"\tKeptStockBpPaths []string `json:\"kept_stock_bp_paths\"`\n" +
 		"}\n\n" +
 		"// load{{.Camel}}BpRouteManifest reads the {{.Lane}} lane's BP route manifest if available.\n" +
 		"// Returns nil (no error) when absent — optional infrastructure, identity transform. Fatal only\n" +
@@ -101,12 +111,12 @@ var finderSharedTmpl = template.Must(template.New("findershared").Parse(
 		"\tif strings.HasPrefix(bp, \"external/kotlinc-holo/\") {\n" +
 		"\t\treturn false\n" +
 		"\t}\n" +
-		"\tfor _, comp := range strings.Split(bp, \"/\") {\n" +
+		"{{if .HasOtherLanes}}\tfor _, comp := range strings.Split(bp, \"/\") {\n" +
 		"\t\tif {{.SuffixChain}} {\n" +
 		"\t\t\treturn true\n" +
 		"\t\t}\n" +
 		"\t}\n" +
-		"\treturn false\n" +
+		"{{end}}\treturn false\n" +
 		"}\n"))
 
 // finderRenameApplyTmpl — the RENAME / Model-A hybrid apply (NexusM style: keep-name framework-class,
@@ -304,9 +314,13 @@ var finderKeepNameApplyTmpl = template.Must(template.New("keepnameapply").Parse(
 		"func apply{{.Camel}}BpRoutes(ctx Context, config Config, androidBps []string) []string {\n" +
 		"\tmanifest := load{{.Camel}}BpRouteManifest(ctx, config)\n" +
 		"\ttoDrop := map[string]bool{}\n" +
+		"\tkeptStock := map[string]bool{}\n" +
 		"\tif manifest != nil {\n" +
 		"\t\tfor _, decl := range manifest.DroppedNamespaceDeclPaths {\n" +
 		"\t\t\ttoDrop[decl] = true\n" +
+		"\t\t}\n" +
+		"\t\tfor _, kept := range manifest.KeptStockBpPaths {\n" +
+		"\t\t\tkeptStock[kept] = true // additive dir: stock parallel stays (route-curate)\n" +
 		"\t\t}\n" +
 		"\t}\n" +
 		"\t// Lane roots declare a namespace → drop them so lane modules collapse to global (matching stock).\n" +
@@ -333,7 +347,7 @@ var finderKeepNameApplyTmpl = template.Must(template.New("keepnameapply").Parse(
 		"\t\tif toDrop[bp] {\n" +
 		"\t\t\tcontinue // namespace-collapse drop (lane bp removed); its stock parallel is kept\n" +
 		"\t\t}\n" +
-		"\t\tif stock := {{.Lane}}StockParallel(bp); stock != \"\" {\n" +
+		"\t\tif stock := {{.Lane}}StockParallel(bp); stock != \"\" && !keptStock[stock] {\n" +
 		"\t\t\ttoDrop[stock] = true // per-file replacement: drop the stock parallel\n" +
 		"\t\t}\n" +
 		"\t}\n" +
@@ -397,7 +411,7 @@ func genFinderLaneFuncs(c LaneConfig, otherSuffixes []string) (string, error) {
 	if chain == "" {
 		chain = "false" // no sibling lanes yet
 	}
-	data := finderTmplData{Lane: c.Name, Camel: c.CamelCase, DirSuffix: c.DirSuffix, DirPrefix: c.DirPrefix, SuffixChain: chain}
+	data := finderTmplData{Lane: c.Name, Camel: c.CamelCase, DirSuffix: c.DirSuffix, DirPrefix: c.DirPrefix, SuffixChain: chain, HasOtherLanes: len(otherSuffixes) > 0}
 	var sb strings.Builder
 	if err := finderSharedTmpl.Execute(&sb, data); err != nil {
 		return "", err

@@ -32,12 +32,12 @@ func TestUndefinedDeps(t *testing.T) {
 		os.WriteFile(p, []byte(body), 0o644)
 	}
 	mk("frameworks-holo/base/Android.bp", "java_library {\n    name: \"lane_lib\",\n    static_libs: [\"present\", \"gone\", \"shadowed\", \"dropped\", \"lane_lib2\", \"included\"],\n}\njava_library {\n    name: \"lane_lib2\",\n}\n")
-	mk("frameworks/base/Android.bp", "java_library {\n    name: \"stock_lib\",\n}\n")              // has a lane parallel: dropped by the finder
+	mk("frameworks/base/Android.bp", "java_library {\n    name: \"stock_lib\",\n}\n")            // has a lane parallel: dropped by the finder
 	mk("frameworks/libs/x/Android.bp", "java_library {\n    name: \"present\",\n}\n")            // no lane parallel: loads
 	mk("frameworks/libs/y/Android.bp", "java_library {\n    name: \"shadowed\",\n}\n")           // lane parallel exists but defines something else
 	mk("frameworks-holo/libs/y/Android.bp", "java_library {\n    name: \"shadowed-holo\",\n}\n") // the Holo rename case
 	mk("system/z/Android.bp", "java_library {\n    name: \"dropped\",\n}\n")                     // route-manifest drop
-	mk("frameworks/libs/w/Android.bp", "build = [\"Flags.bp\"]\n")                                // pulls Flags.bp into the package
+	mk("frameworks/libs/w/Android.bp", "build = [\"Flags.bp\"]\n")                               // pulls Flags.bp into the package
 	mk("frameworks/libs/w/Flags.bp", "java_library {\n    name: \"included\",\n}\n")
 	mk(".holo/holo_bp_route_manifest.json", "{\"dropped_namespace_decl_paths\": [\"system/z/Android.bp\"]}\n")
 	rep := undefinedDeps(root, "holo")

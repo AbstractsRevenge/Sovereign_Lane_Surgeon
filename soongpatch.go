@@ -179,6 +179,9 @@ type routeManifest struct {
 	Description               string   `json:"description"`
 	DroppedNamespaceDeclPaths []string `json:"dropped_namespace_decl_paths"`
 	AddedNamespaceDeclPaths   []string `json:"added_namespace_decl_paths"`
+	// KeptStockBpPaths: stock bps kept although a lane parallel exists (additive lane dirs), written by
+	// UX Design Governance's `govern route-curate`; the generated finder honors them.
+	KeptStockBpPaths []string `json:"kept_stock_bp_paths"`
 	// DerivedFrom names the lane this one was SEEDED FROM (create -from), empty for a
 	// stock-seeded lane. It makes the tree self-describing: a downstream tool that has
 	// no authored config for this lane can ask what it came from and inherit that
@@ -284,6 +287,7 @@ func emitRouteManifestFrom(lane, camel, outRoot, srcLane string) ([]byte, error)
 			"surgical dangler-drop, not blanket flag. Add more from `doctor`/build evidence as they surface.", lane, camel),
 		DroppedNamespaceDeclPaths: drops,
 		AddedNamespaceDeclPaths:   []string{},
+		KeptStockBpPaths:          []string{},
 		DerivedFrom:               srcLane,
 	}
 	return json.MarshalIndent(m, "", "  ")

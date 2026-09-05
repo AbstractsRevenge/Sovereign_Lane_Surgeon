@@ -227,7 +227,10 @@ PRODUCT_MANUFACTURER := Google
 
 DEVICE_MANIFEST_FILE := device/google/{{.Family}}-{{.Lane}}/manifest.xml
 PRODUCT_CHARACTERISTICS += {{.Lane}}
-PRODUCT_SYSTEM_PROPERTIES += ro.{{.Lane}}.framework=true
+# The lane marker lives on the PRODUCT partition: android-17's generic_system artifact rule rejects
+# PRODUCT_SYSTEM_PROPERTIES from a device makefile ("Offending entries: ro.<lane>.framework=true",
+# 2026-09-05), and /product/build.prop is read system-wide on 15 and 17 alike.
+PRODUCT_PRODUCT_PROPERTIES += ro.{{.Lane}}.framework=true
 
 # Lane identity sound defaults — land in PRODUCT_PRODUCT_PROPERTIES so they write LAST into
 # /product/etc/build.prop (loaded last on this device) and win at runtime over the inherited

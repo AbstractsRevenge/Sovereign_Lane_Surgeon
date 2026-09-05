@@ -477,7 +477,9 @@ then defines every module in it twice. Gate 12 on android-17 lost ten modules to
 
 **Kotlin twin directories are KSS's, not the lane's.** A `kotlin/` directory beside a stock `java/`
 whose files have `.java` counterparts (frameworks/opt/vcard, the stats VTS tests) is a Kotlin Release
-Sovereignty twin from the android-15 lane. It must not be carried into a fresh lane: with the java bp
+Sovereignty twin from the android-15 lane. The test is the counterpart, not the directory name: a
+`kotlin/` directory holding Holo's own sources (`packages/wallpapers/shared_gl/kotlin/dev/holo/...`)
+is lane content and stays. It must not be carried into a fresh lane: with the java bp
 removed, stock's java bp loads and collides with the twin's bp. KSS re-creates the twins when the
 `-kotlin` release is installed on the target. Stock's own `kotlin/` directories (SystemUI's
 `util/kotlin`, Music) and Holo's own Kotlin libraries under `libs/androidx/compose/*/src/main/kotlin`

@@ -224,3 +224,44 @@ func TestRequalifyPath_PodsCarveOut(t *testing.T) {
 		}
 	}
 }
+
+// TestDiscoverNeverAllowSites_FirstLane pins the first-lane gap: a plugin allowlist is found by its
+// AddNeverAllowRules call even when NO lane literal exists yet, and PatchNeverallowLanePaths then
+// mirrors each stock path onto the lane. Idempotent on a second pass. (android-17 icu.go case.)
+func TestDiscoverNeverAllowSites_FirstLane(t *testing.T) {
+	root := t.TempDir()
+	mk := func(rel, body string) {
+		p := filepath.Join(root, rel)
+		os.MkdirAll(filepath.Dir(p), 0o755)
+		os.WriteFile(p, []byte(body), 0o644)
+	}
+	icu := "package icu\n\nimport \"android/soong/android\"\n\nfunc init() {\n\thost_allowlist := []string{\n\t\t\"external/icu/\",\n\t\t\"frameworks/base/libs/hwui\",\n\t\t\"packages/modules/RuntimeI18n/apex/\",\n\t}\n\tandroid.AddNeverAllowRules(android.NeverAllow().InDirectDeps(\"libandroidicu\").NotIn(host_allowlist...))\n}\n"
+	mk("external/icu/build/icu.go", icu)
+	// build/soong is owned by the dedicated neverallow.go patcher — must NOT be discovered here.
+	mk("build/soong/android/neverallow.go", "package android\n\nfunc init() { AddNeverAllowRules(NeverAllow().NotIn(\"frameworks/base\")) }\n")
+	// A plugin with no stock path in it is not a lane concern.
+	mk("art/build/art.go", "package art\n\nimport \"android/soong/android\"\n\nfunc init() { android.AddNeverAllowRules(android.NeverAllow().NotIn(\"art/\")) }\n")
+	// Test files and snapshots are skipped.
+	mk("external/icu/build/icu_test.go", icu)
+	mk("_snapshots/x/icu.go", icu)
+
+	hits := discoverNeverAllowSites(root)
+	if len(hits) != 1 || filepath.ToSlash(hits[0]) != "external/icu/build/icu.go" {
+		t.Fatalf("discovered %v, want exactly [external/icu/build/icu.go]", hits)
+	}
+	out, changed, err := PatchNeverallowLanePaths([]byte(icu), "holo")
+	if err != nil || !changed {
+		t.Fatalf("patch: changed=%v err=%v", changed, err)
+	}
+	for _, want := range []string{"\"frameworks-holo/base/libs/hwui\"", "\"packages-holo/modules/RuntimeI18n/apex/\""} {
+		if !strings.Contains(string(out), want) {
+			t.Errorf("patched icu.go lacks %s:\n%s", want, out)
+		}
+	}
+	if strings.Contains(string(out), "\"external-holo/") {
+		t.Errorf("external/ must not be mirrored (only frameworks/ and packages/):\n%s", out)
+	}
+	if _, again, _ := PatchNeverallowLanePaths(out, "holo"); again {
+		t.Errorf("second pass changed the file — not idempotent")
+	}
+}

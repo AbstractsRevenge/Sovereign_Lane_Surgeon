@@ -311,6 +311,59 @@ func emitRouteManifestFrom(lane, camel, outRoot, srcLane string) ([]byte, error)
 // build/soong/android/androidmk.go, build/soong/android/apex.go.
 // ─────────────────────────────────────────────────────────────────────────────────────────────
 
+// discoverNeverAllowSites returns every .go file OUTSIDE build/soong that calls
+// android.AddNeverAllowRules and names a stock frameworks/ or packages/ path. Such a plugin
+// restricts a dependency to an allowlist of directories, and a lane that forks one of those
+// directories fails with "violates neverallow requirements" the first time the lane builds.
+//
+// discoverLaneAllowlists cannot find these on a FIRST lane: it keys on an existing
+// "<root>-<lane>/" literal, and a pristine tree has none. This keys on the CALL instead, which is
+// true by construction of what the file is. Found the hard way on android-17 (2026-09-05):
+// external/icu/build/icu.go allowlists packages/modules/RuntimeI18n/ for libandroidicu, and the
+// full packages/ fork carried packages-holo/modules/RuntimeI18n/apex — refused at Soong analysis.
+// The fix is the same rule PatchNeverallowLanePaths applies to build/soong/android/neverallow.go:
+// every stock path gets its lane twin beside it. Skip rules match discoverLaneAllowlists.
+func discoverNeverAllowSites(outRoot string) []string {
+	var hits []string
+	filepath.Walk(outRoot, func(p string, fi os.FileInfo, e error) error {
+		if e != nil {
+			return nil
+		}
+		base := filepath.Base(p)
+		if fi.IsDir() {
+			switch {
+			case base == ".git", base == ".repo", strings.HasPrefix(base, ".sld-"),
+				strings.HasPrefix(base, "out") && filepath.Dir(p) == outRoot,
+				strings.HasPrefix(base, "frameworks-"), strings.HasPrefix(base, "packages-"),
+				base == "_snapshots", strings.Contains(base, "snapshot"),
+				p == filepath.Join(outRoot, "build", "soong"): // owned by the dedicated patchers
+				return filepath.SkipDir
+			}
+			return nil
+		}
+		if filepath.Ext(p) != ".go" || strings.HasSuffix(p, "_test.go") || fi.Size() > 4<<20 {
+			return nil
+		}
+		b, rerr := os.ReadFile(p)
+		if rerr != nil {
+			return nil
+		}
+		src := string(b)
+		if !strings.Contains(src, "AddNeverAllowRules(") {
+			return nil
+		}
+		if !strings.Contains(src, `"frameworks/`) && !strings.Contains(src, `"packages/`) {
+			return nil
+		}
+		if rel, rerr := filepath.Rel(outRoot, p); rerr == nil {
+			hits = append(hits, rel)
+		}
+		return nil
+	})
+	sort.Strings(hits)
+	return hits
+}
+
 // knownLaneSuffixes returns the lane names already present in the tree (from frameworks-*/ dirs),
 // excluding the lane being created. These are the tokens that mark a list as lane-aware.
 func knownLaneSuffixes(outRoot, newLane string) []string {

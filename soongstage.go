@@ -106,6 +106,26 @@ func stageSoongPatches(c LaneConfig, outRoot string) (staged int, fatal bool) {
 		nevStaged = true
 	}
 
+	// Neverallow sites OUTSIDE build/soong (Soong plugins calling AddNeverAllowRules with stock
+	// allowlists, e.g. external/icu/build/icu.go). Discovered by the call, so a FIRST lane finds them
+	// too; patched with the same stock-path-mirroring rule as neverallow.go. See discoverNeverAllowSites.
+	nevSiteOrigs := map[string][]byte{}
+	for _, rel := range discoverNeverAllowSites(outRoot) {
+		src, rerr := readStagedOrLive(outRoot, rel)
+		if rerr != nil {
+			continue
+		}
+		out, ch, perr := PatchNeverallowLanePaths(src, c.Name)
+		if perr != nil {
+			fmt.Fprintf(os.Stderr, "  ! neverallow site %s: %v (skipped)\n", rel, perr)
+			continue
+		}
+		if ch {
+			targets = append(targets, soongTarget{rel, out, true})
+			nevSiteOrigs[rel] = src
+		}
+	}
+
 	suffixes, err := deriveOtherLaneSuffixes(aarSrc, c.Name)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "  ! derive other-lane suffixes: %v\n", err)
@@ -192,6 +212,9 @@ func stageSoongPatches(c LaneConfig, outRoot string) (staged int, fatal bool) {
 	stageRoot := filepath.Join(outRoot, stageDir)
 	origs := map[string][]byte{aarRel: aarSrc, visRel: visSrc, finRel: finSrc}
 	for k, v := range allowOrigs {
+		origs[k] = v
+	}
+	for k, v := range nevSiteOrigs {
 		origs[k] = v
 	}
 	if compatStaged {

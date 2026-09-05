@@ -163,3 +163,26 @@ func TestSoongConfigRenamer(t *testing.T) {
 		t.Error("same source and target must be a no-op renamer")
 	}
 }
+
+// TestRequalifyEmbeddedLabels pins the whole-root-fork case: a qualified label inside a genrule cmd
+// string is repointed iff its lane parallel exists (the finder drops the stock bp then), and is left
+// alone otherwise. The interior-segment trap does not apply: "$(location //" anchors a label start.
+func TestRequalifyEmbeddedLabels(t *testing.T) {
+	root := t.TempDir()
+	os.MkdirAll(filepath.Join(root, "packages-holo", "services", "x", "utils", "gen"), 0o755)
+	os.WriteFile(filepath.Join(root, "packages-holo", "services", "x", "utils", "gen", "Android.bp"), []byte("// lane\n"), 0o644)
+	m := map[string]string{"frameworks": "frameworks-holo", "packages": "packages-holo"}
+	cache := map[string]bool{}
+	for _, c := range []struct{ in, want string }{
+		{"$(location //packages/services/x/utils/gen:gen) $(location other) $(out) $(in)",
+			"$(location //packages-holo/services/x/utils/gen:gen) $(location other) $(out) $(in)"},
+		{"$(locations //packages/services/x/utils/gen) more", "$(locations //packages-holo/services/x/utils/gen) more"},
+		{"$(location //packages/services/unforked/tool:tool)", "$(location //packages/services/unforked/tool:tool)"}, // no lane parallel: stock stays
+		{"//frameworks/base/packages/SystemUI/aconfig:flags", "//frameworks/base/packages/SystemUI/aconfig:flags"},   // not embedded: untouched here
+		{"plain cmd $(out)", "plain cmd $(out)"},
+	} {
+		if got := requalifyEmbeddedLabels(c.in, root, m, cache, false, ""); got != c.want {
+			t.Errorf("requalifyEmbeddedLabels(%q)\n got %q\nwant %q", c.in, got, c.want)
+		}
+	}
+}

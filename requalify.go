@@ -117,6 +117,30 @@ func requalifyEmbedded(s string, laneMap map[string]string) string {
 	return s
 }
 
+// requalifyEmbeddedLabels repoints a QUALIFIED label that appears inside a larger string:
+// `$(location //packages/services/x/utils/gen:gen)` in a genrule cmd. requalifyEmbedded cannot touch
+// it (a STOCK root is never replaced mid-string, for the interior-segment reason documented there),
+// and requalifyLabel never sees it (the string does not START with "//"). Yet in a whole-root fork
+// the lane parallel of that label's directory exists, so the finder drops the stock bp and the label
+// names nothing: "cmd: unknown location label" at Soong analysis (android-17 Holo landing, 2026-09-05,
+// packages-holo/services/display_safety/service/harry-prebuilt).
+//
+// The "$(location" / "$(locations" prefix plus the "//" anchor identify a LABEL START, never an
+// interior segment, so the token is handed to requalifyLabel exactly as a top-level label would be —
+// same lane-parallel existence guard, same prefix handling. Unconditional (not gated on -paths):
+// whenever the parallel exists the stock bp is dropped and the rewrite is mandatory.
+var embeddedLocationLabel = regexp.MustCompile(`(\$\(locations?\s+)(//[^\s):]+(?::[^\s)]+)?)`)
+
+func requalifyEmbeddedLabels(s, outRoot string, laneMap map[string]string, cache map[string]bool, force bool, prefix string) string {
+	if !strings.Contains(s, "$(location") {
+		return s
+	}
+	return embeddedLocationLabel.ReplaceAllStringFunc(s, func(m string) string {
+		sub := embeddedLocationLabel.FindStringSubmatch(m)
+		return sub[1] + requalifyLabel(sub[2], outRoot, laneMap, cache, force, prefix)
+	})
+}
+
 // requalifyPath is the shared root-remap used by both the qualified and bare forms. body is the
 // path with any "//" already stripped; lead is re-prepended on a hit. orig is returned unchanged
 // when nothing matches, preserving the caller's exact string.
@@ -245,6 +269,9 @@ func requalifyFileCfg(path, outRoot string, laneMap map[string]string, cache map
 			}
 			if nv == v.Value && barePaths {
 				nv = requalifyEmbedded(v.Value, laneMap)
+			}
+			if nv == v.Value {
+				nv = requalifyEmbeddedLabels(v.Value, outRoot, laneMap, cache, force, prefix)
 			}
 			if nv != v.Value {
 				v.Value = nv

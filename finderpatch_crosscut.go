@@ -85,7 +85,14 @@ func appendSuffixToOtherLaneFunc(src []byte, funcName, newSuffix string) (out []
 		return true
 	})
 	if last == nil {
-		return nil, false, fmt.Errorf("no strings.HasSuffix(comp, ...) chain in func %q", funcName)
+		// No chain to extend: this func was generated with HasOtherLanes=false — it was the FIRST
+		// lane on the tree, so its body carries no component loop at all (a loop with an empty body
+		// leaves `comp` declared-and-unused, a Go compile error, so the generator omits it). Seed
+		// the loop before the closing return instead of failing. Without this, adding a SECOND lane
+		// leaves the first lane blind to it, and since both keep stock module names the first
+		// lane's build sees the second lane's bps and collides. (Found seeding holo2 beside holo,
+		// 2026-09-06.)
+		return seedSuffixLoopInOtherLaneFunc(src, fset, fd, newSuffix)
 	}
 	pos := fset.Position(last.Pos())
 	indent := strings.Repeat("\t", pos.Column-1) // operand's own indentation (tabs = 1 col each)
@@ -126,4 +133,39 @@ func patchExistingOtherLaneFuncs(src []byte, newLane, newCamel string) (out []by
 		out = o
 	}
 	return out, changedFuncs, nil
+}
+
+// seedSuffixLoopInOtherLaneFunc inserts
+//
+//	for _, comp := range strings.Split(<param>, "/") {
+//		if strings.HasSuffix(comp, <newSuffix>) {
+//			return true
+//		}
+//	}
+//
+// immediately before the func's final statement (its closing `return`), located by go/ast — never
+// by regex. Any earlier special cases in the body (an `external/kotlinc-<lane>/` prefix guard, say)
+// are left exactly where they are.
+func seedSuffixLoopInOtherLaneFunc(src []byte, fset *token.FileSet, fd *ast.FuncDecl, newSuffix string) (out []byte, changed bool, err error) {
+	if fd.Body == nil || len(fd.Body.List) == 0 {
+		return nil, false, fmt.Errorf("func %q has no body to seed", fd.Name.Name)
+	}
+	param := "bp"
+	if fd.Type.Params != nil && len(fd.Type.Params.List) > 0 && len(fd.Type.Params.List[0].Names) > 0 {
+		param = fd.Type.Params.List[0].Names[0].Name
+	}
+	last := fd.Body.List[len(fd.Body.List)-1]
+	pos := fset.Position(last.Pos())
+	indent := strings.Repeat("\t", pos.Column-1)
+	loop := fmt.Sprintf("for _, comp := range strings.Split(%s, \"/\") {\n"+
+		"%s\tif strings.HasSuffix(comp, %q) {\n"+
+		"%s\t\treturn true\n"+
+		"%s\t}\n"+
+		"%s}\n%s", param, indent, newSuffix, indent, indent, indent, indent)
+	off := pos.Offset
+	out = append(append(append([]byte{}, src[:off]...), []byte(loop)...), src[off:]...)
+	if _, perr := parser.ParseFile(token.NewFileSet(), "", out, 0); perr != nil {
+		return nil, false, fmt.Errorf("post-seed reparse failed: %w", perr)
+	}
+	return out, true, nil
 }

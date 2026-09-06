@@ -192,3 +192,55 @@ func rules() {
 		t.Error("second run must be a no-op")
 	}
 }
+
+// A lane that was the FIRST on the tree has no component loop in its isOtherLaneBpFor<X> func —
+// the generator omits it, because a loop with an empty body leaves `comp` declared-and-unused.
+// Adding a SECOND lane must seed the loop rather than fail: both lanes keep stock module names, so
+// a first lane blind to the second sees its bps and collides. (Found seeding holo2 beside holo.)
+func TestAppendSuffixSeedsLoopWhenNoChainExists(t *testing.T) {
+	src := []byte(`package build
+
+import "strings"
+
+func isOtherLaneBpForHolo(bp string) bool {
+	if strings.HasPrefix(bp, "external/kotlinc-holo/") {
+		return false
+	}
+	return false
+}
+`)
+	out, changed, err := appendSuffixToOtherLaneFunc(src, "isOtherLaneBpForHolo", "-holo2")
+	if err != nil {
+		t.Fatalf("seed failed: %v", err)
+	}
+	if !changed {
+		t.Fatal("reported no change")
+	}
+	got := string(out)
+	for _, want := range []string{
+		`for _, comp := range strings.Split(bp, "/") {`,
+		`if strings.HasSuffix(comp, "-holo2") {`,
+		"return true",
+	} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("missing %q in:\n%s", want, got)
+		}
+	}
+	// the pre-existing guard stays, and stays FIRST
+	if i, j := strings.Index(got, "kotlinc-holo"), strings.Index(got, "comp"); i < 0 || j < 0 || i > j {
+		t.Fatalf("existing guard lost or reordered:\n%s", got)
+	}
+	// and it is idempotent
+	again, changed2, err := appendSuffixToOtherLaneFunc(out, "isOtherLaneBpForHolo", "-holo2")
+	if err != nil || changed2 || string(again) != got {
+		t.Fatalf("not idempotent: changed=%v err=%v", changed2, err)
+	}
+	// a THIRD lane then extends the chain the seed created, rather than seeding again
+	out3, changed3, err := appendSuffixToOtherLaneFunc(out, "isOtherLaneBpForHolo", "-holo3")
+	if err != nil || !changed3 {
+		t.Fatalf("third lane: changed=%v err=%v", changed3, err)
+	}
+	if strings.Count(string(out3), "for _, comp := range") != 1 {
+		t.Fatalf("third lane seeded a second loop:\n%s", string(out3))
+	}
+}

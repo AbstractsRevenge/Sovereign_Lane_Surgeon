@@ -131,7 +131,7 @@ func stageSoongPatches(c LaneConfig, outRoot string) (staged int, fatal bool) {
 		fmt.Fprintf(os.Stderr, "  ! derive other-lane suffixes: %v\n", err)
 		return 0, true
 	}
-	block, err := genFinderLaneFuncs(c, suffixes)
+	block, err := genFinderLaneFuncs(c, suffixes, outRoot)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "  ! generate finder funcs: %v\n", err)
 		return 0, true

@@ -21,6 +21,8 @@ import (
 	"go/format"
 	"go/parser"
 	"go/token"
+	"os"
+	"path/filepath"
 	"sort"
 	"strconv"
 	"strings"
@@ -47,6 +49,11 @@ type finderTmplData struct {
 	// omit its component loop entirely: a "for _, comp := range … { if false {…} }" body leaves comp
 	// declared-and-unused, which is a Go compile error. (Ported from holo-adopt, 2026-09-05.)
 	HasOtherLanes bool
+	// HasKotlincLane is true iff external/kotlinc-holo/ actually exists under -out. The carve-out
+	// below asserts a directory that is NOT universal: android-17.0.0_r1 and android-15.0.0_r36
+	// both carry the SHARED stock external/kotlinc/ and no kotlinc-holo at all (checked
+	// 2026-09-06), so emitting the guard there is dead code that misstates the tree.
+	HasKotlincLane bool
 }
 
 // finderSharedTmpl = the funcs common to BOTH lane models: detection, manifest struct + loader,
@@ -105,12 +112,15 @@ var finderSharedTmpl = template.Must(template.New("findershared").Parse(
 		"}\n\n" +
 		"// isOtherLaneBpFor{{.Camel}} reports whether a bp lives in a NON-{{.Lane}} lane directory. Lane\n" +
 		"// sovereignty: a {{.Lane}} build must be UNAWARE of alien lanes, so their bp are not loaded. The\n" +
-		"// {{.Lane}} lane's own dirs end in \"{{.DirSuffix}}\" and are never matched here. external/kotlinc-holo/\n" +
-		"// is carved out (its name ends in -holo but it is the universal compiler toolchain, not lane content).\n" +
+		"// {{.Lane}} lane's own dirs end in \"{{.DirSuffix}}\" and are never matched here.\n" +
+		"{{if .HasKotlincLane}}// external/kotlinc-holo/ is carved out (its name ends in -holo but it is the universal\n" +
+		"// compiler toolchain, not lane content).\n" +
+		"{{end}}" +
 		"func isOtherLaneBpFor{{.Camel}}(bp string) bool {\n" +
-		"\tif strings.HasPrefix(bp, \"external/kotlinc-holo/\") {\n" +
+		"{{if .HasKotlincLane}}\tif strings.HasPrefix(bp, \"external/kotlinc-holo/\") {\n" +
 		"\t\treturn false\n" +
 		"\t}\n" +
+		"{{end}}" +
 		"{{if .HasOtherLanes}}\tfor _, comp := range strings.Split(bp, \"/\") {\n" +
 		"\t\tif {{.SuffixChain}} {\n" +
 		"\t\t\treturn true\n" +
@@ -398,7 +408,7 @@ func gofmtSnippet(decls string) (string, error) {
 // genFinderLaneFuncs renders + gofmt-normalizes the 5 additive finder funcs for the lane.
 // otherSuffixes is the set of OTHER lanes' dir suffixes (e.g. ["-holo","-nexus"]) this lane
 // must be blind to — derived from the tree's current isLaneLunch minus the new lane.
-func genFinderLaneFuncs(c LaneConfig, otherSuffixes []string) (string, error) {
+func genFinderLaneFuncs(c LaneConfig, otherSuffixes []string, outRoot string) (string, error) {
 	if len(otherSuffixes) == 0 {
 		// A first lane on a fresh tree: nothing to drop. Emit a chain that never matches.
 		otherSuffixes = nil
@@ -411,7 +421,8 @@ func genFinderLaneFuncs(c LaneConfig, otherSuffixes []string) (string, error) {
 	if chain == "" {
 		chain = "false" // no sibling lanes yet
 	}
-	data := finderTmplData{Lane: c.Name, Camel: c.CamelCase, DirSuffix: c.DirSuffix, DirPrefix: c.DirPrefix, SuffixChain: chain, HasOtherLanes: len(otherSuffixes) > 0}
+	data := finderTmplData{HasKotlincLane: kotlincLaneDirExists(outRoot),
+		Lane: c.Name, Camel: c.CamelCase, DirSuffix: c.DirSuffix, DirPrefix: c.DirPrefix, SuffixChain: chain, HasOtherLanes: len(otherSuffixes) > 0}
 	var sb strings.Builder
 	if err := finderSharedTmpl.Execute(&sb, data); err != nil {
 		return "", err
@@ -787,4 +798,16 @@ func insertPipelineCall(src []byte, camel string) (out []byte, changed bool, err
 func lineStartOffset(fset *token.FileSet, pos token.Pos) int {
 	p := fset.Position(pos)
 	return p.Offset - (p.Column - 1)
+}
+
+// kotlincLaneDirExists reports whether external/kotlinc-holo/ is really in the tree. The finder's
+// carve-out for it is only emitted when it is: on a tree that shares the stock external/kotlinc/
+// (android-17 and android-15 both do) the guard would be dead code asserting a layout that is not
+// there.
+func kotlincLaneDirExists(outRoot string) bool {
+	if outRoot == "" {
+		return false
+	}
+	fi, err := os.Stat(filepath.Join(outRoot, "external", "kotlinc-holo"))
+	return err == nil && fi.IsDir()
 }

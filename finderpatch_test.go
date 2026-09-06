@@ -19,6 +19,8 @@ import (
 	"go/format"
 	"go/parser"
 	"go/token"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -50,7 +52,7 @@ func mustParse(t *testing.T, src []byte) {
 // shape (detection, manifest struct, loader, apply, isOtherLaneBpFor) + correct suffix chain.
 func TestGenFinderLaneFuncs(t *testing.T) {
 	cfg := deriveLane("aurora", true, nil, true, true, "")
-	block, err := genFinderLaneFuncs(cfg, []string{"-holo", "-nexus"})
+	block, err := genFinderLaneFuncs(cfg, []string{"-holo", "-nexus"}, "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -63,7 +65,6 @@ func TestGenFinderLaneFuncs(t *testing.T) {
 		"func applyAuroraBpRoutes(ctx Context, config Config, androidBps []string) []string",
 		"isOtherLaneBpForAurora(bp)",
 		"func isOtherLaneBpForAurora(bp string) bool",
-		`strings.HasPrefix(bp, "external/kotlinc-holo/")`,
 		`strings.HasSuffix(comp, "-holo")`,
 		`strings.HasSuffix(comp, "-nexus")`,
 	} {
@@ -79,7 +80,7 @@ func TestGenFinderLaneFuncs(t *testing.T) {
 // rename generates the drop-other-only apply (no StockParallel func).
 func TestGenFinderModelAware(t *testing.T) {
 	keep := deriveLane("aurora", true, nil, true, true, "") // KeepName=true → Holo model
-	kblock, err := genFinderLaneFuncs(keep, []string{"-holo"})
+	kblock, err := genFinderLaneFuncs(keep, []string{"-holo"}, "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -96,7 +97,7 @@ func TestGenFinderModelAware(t *testing.T) {
 	mustParse(t, []byte("package p\n\n"+kblock))
 
 	rename := deriveLane("aurora", false, nil, true, true, "AuroraM") // KeepName=false → RENAME/Model-A
-	rblock, err := genFinderLaneFuncs(rename, []string{"-holo"})
+	rblock, err := genFinderLaneFuncs(rename, []string{"-holo"}, "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -121,7 +122,7 @@ func TestGenFinderModelAware(t *testing.T) {
 // TestInsertBeforeFunc: splice the generated funcs before a sibling; result parses; idempotent.
 func TestInsertBeforeFunc(t *testing.T) {
 	cfg := deriveLane("aurora", true, nil, true, true, "")
-	block, err := genFinderLaneFuncs(cfg, []string{"-holo", "-nexus"})
+	block, err := genFinderLaneFuncs(cfg, []string{"-holo", "-nexus"}, "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -193,7 +194,7 @@ func TestDeriveOtherLaneSuffixes(t *testing.T) {
 // resolving its modules by bare name; without the predicate the generated finder does not compile.
 func TestKeepNameApplyEmitsNamespaceCollapse(t *testing.T) {
 	c := deriveLane("zed", true, nil, false, false, "")
-	block, err := genFinderLaneFuncs(c, []string{"-holo"})
+	block, err := genFinderLaneFuncs(c, []string{"-holo"}, "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -218,7 +219,7 @@ func TestKeepNameApplyEmitsNamespaceCollapse(t *testing.T) {
 // an additive lane dir (monet-holo beside stock monet) keeps its stock parallel.
 func TestGenFinderLaneFuncs_SoleLaneAndKeptStock(t *testing.T) {
 	c := deriveLane("holo", true, nil, false, false, "")
-	sole, err := genFinderLaneFuncs(c, nil)
+	sole, err := genFinderLaneFuncs(c, nil, "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -230,11 +231,44 @@ func TestGenFinderLaneFuncs_SoleLaneAndKeptStock(t *testing.T) {
 			t.Errorf("keep-name finder block lacks %q", want)
 		}
 	}
-	multi, err := genFinderLaneFuncs(c, []string{"-nexusm"})
+	multi, err := genFinderLaneFuncs(c, []string{"-nexusm"}, "")
 	if err != nil {
 		t.Fatal(err)
 	}
 	if !strings.Contains(multi, "for _, comp := range") || !strings.Contains(multi, `"-nexusm"`) {
 		t.Errorf("multi-lane finder block must loop over components with the sibling suffix")
 	}
+}
+
+// The external/kotlinc-holo/ carve-out is emitted ONLY when that directory is really in the tree.
+// android-17.0.0_r1 and android-15.0.0_r36 both carry the SHARED stock external/kotlinc/ and no
+// kotlinc-holo at all, so emitting it unconditionally is dead code asserting a layout that is not
+// there (checked against both trees, 2026-09-06).
+func TestKotlincCarveOutIsEvidenceGated(t *testing.T) {
+	cfg := deriveLane("aurora", true, nil, false, false, "")
+	guard := `strings.HasPrefix(bp, "external/kotlinc-holo/")`
+
+	// no such directory: no guard
+	absent, err := genFinderLaneFuncs(cfg, []string{"-holo"}, t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(absent, guard) {
+		t.Errorf("carve-out emitted for a tree without external/kotlinc-holo:\n%s", absent)
+	}
+	mustParse(t, []byte("package p\n\n"+absent))
+
+	// the directory exists: guard emitted
+	root := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(root, "external", "kotlinc-holo"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	present, err := genFinderLaneFuncs(cfg, []string{"-holo"}, root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(present, guard) {
+		t.Errorf("carve-out missing for a tree that HAS external/kotlinc-holo:\n%s", present)
+	}
+	mustParse(t, []byte("package p\n\n"+present))
 }

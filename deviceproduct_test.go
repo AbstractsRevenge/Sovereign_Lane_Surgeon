@@ -31,7 +31,7 @@ func lynxRes() deviceResolution {
 // proven aosp_lynx_holo.mk, auto-fills the SoC inherit, and keeps other blocks TODO.
 func TestGenDeviceProduct(t *testing.T) {
 	cfg := deriveLane("holo", true, []string{"lynx"}, true, true, "")
-	rel, content, err := genDeviceProduct(cfg, lynxRes(), deviceProductTmpl, "aosp_lynx_holo.mk")
+	rel, content, err := genDeviceProduct(cfg, lynxRes(), deviceProductTmpl, "aosp_lynx_holo.mk", "cp2a")
 	if err != nil {
 		t.Fatalf("render: %v", err)
 	}
@@ -75,7 +75,7 @@ func TestGenDeviceProduct(t *testing.T) {
 func TestGenDeviceProductFamily(t *testing.T) {
 	cfg := deriveLane("testing", true, []string{"cheetah"}, true, true, "")
 	res := deviceResolution{Product: "cheetah", ProductTitle: "Cheetah", Family: "pantah", SoC: "gs201", Resolved: true}
-	rel, content, err := genDeviceProduct(cfg, res, deviceProductTmpl, "aosp_cheetah_testing.mk")
+	rel, content, err := genDeviceProduct(cfg, res, deviceProductTmpl, "aosp_cheetah_testing.mk", "cp2a")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -103,7 +103,7 @@ func TestGenDeviceProductFamily(t *testing.T) {
 func TestGenDeviceProductParam(t *testing.T) {
 	cfg := deriveLane("aurora", true, []string{"pixel9"}, true, true, "")
 	res := deviceResolution{Product: "pixel9", ProductTitle: "Pixel9", Family: "pixel9"} // unresolved: SoC ""
-	_, content, err := genDeviceProduct(cfg, res, deviceProductTmpl, "aosp_pixel9_aurora.mk")
+	_, content, err := genDeviceProduct(cfg, res, deviceProductTmpl, "aosp_pixel9_aurora.mk", "cp2a")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -158,21 +158,21 @@ func TestResolveDevice(t *testing.T) {
 func TestGenDeviceCompanions(t *testing.T) {
 	cfg := deriveLane("holo", true, []string{"lynx"}, true, true, "")
 
-	_, apm, err := genDeviceProduct(cfg, lynxRes(), androidProductsMkTmpl, "AndroidProducts.mk")
+	_, apm, err := genDeviceProduct(cfg, lynxRes(), androidProductsMkTmpl, "AndroidProducts.mk", "cp2a")
 	if err != nil {
 		t.Fatal(err)
 	}
 	for _, w := range []string{
 		"    $(LOCAL_DIR)/aosp_lynx_holo.mk",
-		"    aosp_lynx_holo-bp1a-userdebug \\",
-		"    aosp_lynx_holo-bp1a-eng",
+		"    aosp_lynx_holo-cp2a-userdebug \\",
+		"    aosp_lynx_holo-cp2a-eng",
 	} {
 		if !strings.Contains(apm, w) {
 			t.Errorf("AndroidProducts.mk missing %q", w)
 		}
 	}
 
-	_, bp, err := genDeviceProduct(cfg, lynxRes(), deviceAndroidBpTmpl, "Android.bp")
+	_, bp, err := genDeviceProduct(cfg, lynxRes(), deviceAndroidBpTmpl, "Android.bp", "cp2a")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -180,7 +180,7 @@ func TestGenDeviceCompanions(t *testing.T) {
 		t.Error("Android.bp missing license module name")
 	}
 
-	_, dmk, err := genDeviceProduct(cfg, lynxRes(), deviceMkStubTmpl, "device-lynx_holo.mk")
+	_, dmk, err := genDeviceProduct(cfg, lynxRes(), deviceMkStubTmpl, "device-lynx_holo.mk", "cp2a")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -190,7 +190,7 @@ func TestGenDeviceCompanions(t *testing.T) {
 	}
 	// Unresolved device → the stock-HW inherit is a TODO (commented), not a live inherit.
 	unRes := deviceResolution{Product: "pixel9", ProductTitle: "Pixel9", Family: "pixel9"}
-	_, dmk2, _ := genDeviceProduct(cfg, unRes, deviceMkStubTmpl, "device-pixel9_holo.mk")
+	_, dmk2, _ := genDeviceProduct(cfg, unRes, deviceMkStubTmpl, "device-pixel9_holo.mk", "cp2a")
 	if !strings.Contains(dmk2, "TODO(pixel9): inherit the stock device HW body") {
 		t.Error("unresolved device should TODO the stock-HW inherit")
 	}
@@ -231,5 +231,31 @@ func TestCopyDeviceFamilyTreeSkipsBoardDirs(t *testing.T) {
 	}
 	if _, err := os.Stat(filepath.Join(dst, "audio", "mixer.xml")); err != nil {
 		t.Error("non-board HW subdirs must still be copied")
+	}
+}
+
+// The lunch's middle token comes from the TREE's own release configs, never a literal: hardcoding
+// "bp1a" made every lane seeded on android-17 offer android-15's lunch choices (holo2, 2026-09-06).
+func TestDetectReleaseToken(t *testing.T) {
+	root := t.TempDir()
+	dir := filepath.Join(root, "build", "release", "release_configs")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	// an android-17 tree: dated configs plus the dateless ones, which must be ignored
+	for _, n := range []string{"ap2a", "ap4a", "bp1a", "cp1a", "cp2a", "eng", "user", "userdebug", "trunk_staging", "mainline_2026_04"} {
+		if err := os.WriteFile(filepath.Join(dir, n+".textproto"), nil, 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if got := detectReleaseToken(root); got != "cp2a" {
+		t.Errorf("android-17 tree: got %q, want cp2a", got)
+	}
+	// a tree that declares none, and no tree at all: the old literal, so behaviour is unchanged
+	if got := detectReleaseToken(t.TempDir()); got != "bp1a" {
+		t.Errorf("no release configs: got %q, want the bp1a fallback", got)
+	}
+	if got := detectReleaseToken(""); got != "bp1a" {
+		t.Errorf("no root: got %q, want the bp1a fallback", got)
 	}
 }

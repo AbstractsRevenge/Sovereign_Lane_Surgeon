@@ -44,6 +44,7 @@ type devTmplData struct {
 	Family       string // "pantah" (device/google/ folder; == Product for lynx/tangorpro)
 	SoC          string // "gs201" — auto-derived; "" ⇒ emits a TODO
 	Rename       bool   // rename/app-naming model (DirPrefix set) — emits the keep-name-stub app allowlist
+	Release      string // lunch's middle token, read from the tree's own release configs ("cp2a")
 }
 
 // deviceResolution is the tree-derived identity of a target device.
@@ -317,9 +318,9 @@ PRODUCT_MAKEFILES := \
     $(LOCAL_DIR)/aosp_{{.Product}}_{{.Lane}}.mk
 
 COMMON_LUNCH_CHOICES := \
-    aosp_{{.Product}}_{{.Lane}}-bp1a-userdebug \
-    aosp_{{.Product}}_{{.Lane}}-bp1a-user \
-    aosp_{{.Product}}_{{.Lane}}-bp1a-eng
+    aosp_{{.Product}}_{{.Lane}}-{{.Release}}-userdebug \
+    aosp_{{.Product}}_{{.Lane}}-{{.Release}}-user \
+    aosp_{{.Product}}_{{.Lane}}-{{.Release}}-eng
 `))
 
 // deviceAndroidBpTmpl — the device dir's Android.bp (package + license boilerplate). The license
@@ -355,12 +356,12 @@ var deviceMkStubTmpl = template.Must(template.New("dmk").Parse(`#
 `))
 
 // genDeviceProduct renders one device file for a resolved device + returns (rel-path, content).
-func genDeviceProduct(c LaneConfig, res deviceResolution, tmpl *template.Template, fname string) (string, string, error) {
+func genDeviceProduct(c LaneConfig, res deviceResolution, tmpl *template.Template, fname, release string) (string, string, error) {
 	data := devTmplData{
 		Lane: c.Name, CamelCase: c.CamelCase,
 		Product: res.Product, ProductTitle: res.ProductTitle,
 		Family: res.Family, SoC: res.SoC,
-		Rename: c.DirPrefix != "",
+		Rename: c.DirPrefix != "", Release: release,
 	}
 	var sb strings.Builder
 	if err := tmpl.Execute(&sb, data); err != nil {
@@ -384,6 +385,7 @@ func title(s string) string {
 // so the lane device dir is COMPLETE + self-contained (all HW files + subdirs), per the proven
 // lynx-nexusm model — see copyDeviceFamilyTree.
 func writeDeviceProducts(c LaneConfig, outRoot string) (wrote, skipped int, fatal bool) {
+	releaseToken := detectReleaseToken(outRoot)
 	copiedFamilies := map[string]bool{}
 	for _, product := range c.Devices {
 		// Seed device/google/<family> from the embedded asset bundle FIRST if -out has no such
@@ -419,7 +421,7 @@ func writeDeviceProducts(c LaneConfig, outRoot string) (wrote, skipped int, fata
 			{deviceMkStubTmpl, fmt.Sprintf("device-%s_%s.mk", res.Product, c.Name)},
 		}
 		for _, f := range files {
-			rel, content, err := genDeviceProduct(c, res, f.tmpl, f.fname)
+			rel, content, err := genDeviceProduct(c, res, f.tmpl, f.fname, releaseToken)
 			if err != nil {
 				fmt.Fprintf(os.Stderr, "  ! render device %s: %v\n", product, err)
 				return wrote, skipped, true
@@ -451,6 +453,7 @@ func writeDeviceProducts(c LaneConfig, outRoot string) (wrote, skipped int, fata
 // insertAfterListHead. Idempotent (patchAlreadyDone if the product mk is already listed — including
 // the freshly-templated single-product file, where it's a no-op), snapshotted (.sld-bak).
 func registerDeviceProduct(c LaneConfig, outRoot string, res deviceResolution) patchStatus {
+	rel := detectReleaseToken(outRoot)
 	abs := filepath.Join(outRoot, "device", "google", res.Family+"-"+c.Name, "AndroidProducts.mk")
 	raw, err := os.ReadFile(abs)
 	if err != nil {
@@ -463,9 +466,9 @@ func registerDeviceProduct(c LaneConfig, outRoot string, res deviceResolution) p
 	prod := fmt.Sprintf("aosp_%s_%s", res.Product, c.Name)
 	mkEntries := []string{fmt.Sprintf("    $(LOCAL_DIR)/%s \\", prodMk)}
 	lunchEntries := []string{
-		fmt.Sprintf("    %s-bp1a-userdebug \\", prod),
-		fmt.Sprintf("    %s-bp1a-user \\", prod),
-		fmt.Sprintf("    %s-bp1a-eng \\", prod),
+		fmt.Sprintf("    %s-%s-userdebug \\", prod, rel),
+		fmt.Sprintf("    %s-%s-user \\", prod, rel),
+		fmt.Sprintf("    %s-%s-eng \\", prod, rel),
 	}
 	out := insertAfterListHead(strings.Split(string(raw), "\n"), "PRODUCT_MAKEFILES", mkEntries)
 	out = insertAfterListHead(out, "COMMON_LUNCH_CHOICES", lunchEntries)
@@ -670,3 +673,38 @@ const apacheNotice = `   Copyright (C) 2026 The Android Open Source Project
    See the License for the specific language governing permissions and
    limitations under the License.
 `
+
+// detectReleaseToken reads the release configs the TREE itself declares
+// (build/release/release_configs/<token>.textproto) and returns the newest dated one — the lunch's
+// middle token. The scheme is a letter, "p", a digit, "a" (ap4a, bp1a, cp2a), which sorts correctly
+// as a plain string, and the dateless configs (eng, user, userdebug, trunk_staging, mainline_*) are
+// skipped. Hardcoding "bp1a" made every lane on android-17 offer android-15's lunch choices
+// (found on the holo2 seed, 2026-09-06). Falls back to "bp1a" when the tree declares none, so a
+// tree without release configs behaves as before.
+func detectReleaseToken(outRoot string) string {
+	const fallback = "bp1a"
+	if outRoot == "" {
+		return fallback
+	}
+	entries, err := os.ReadDir(filepath.Join(outRoot, "build", "release", "release_configs"))
+	if err != nil {
+		return fallback
+	}
+	best := ""
+	for _, e := range entries {
+		n := strings.TrimSuffix(e.Name(), ".textproto")
+		if n == e.Name() || len(n) != 4 {
+			continue
+		}
+		if n[0] < 'a' || n[0] > 'z' || n[1] != 'p' || n[2] < '0' || n[2] > '9' || n[3] != 'a' {
+			continue
+		}
+		if n > best {
+			best = n
+		}
+	}
+	if best == "" {
+		return fallback
+	}
+	return best
+}

@@ -75,6 +75,28 @@ same `create` command with `-stock`. The lane toolkit is documented in full in
 [LANES.md](LANES.md), including the sixteen blocker classes a whole-root fork of `frameworks/` and
 `packages/` surfaced on its way to a green `m droid`.
 
+### Lane-sovereign apex allowed-deps
+
+A lane that forks an updatable apex — `com.android.permission`, `com.android.mediaprovider` — hits
+one surface the file finder cannot route. The apex-allowed-deps check reads its allow-list,
+`packages/modules/common/build/allowed_deps.txt`, by a **raw source path**, not a module reference,
+so the finder's per-file replacement never sees it. Left alone, the lane's forked apexes are gated
+by the stock file, and every new lane dependency forces an edit into stock — the one place lane
+sovereignty forbids, and one that would drift against upstream forever.
+
+`allowed-deps` closes it without touching stock. Soong already unions a second allow-list named by
+`EXTRA_ALLOWED_DEPS_TXT`; the command derives the lane's **delta** — a build's computed
+`new-allowed-deps.txt` minus pristine stock — writes it to
+`packages-<lane>/modules/common/build/allowed_deps.txt` with a sibling `allowed_deps.mk` that each
+lane device product inherits, and leaves the stock file pristine and upstream-tracking. Because the
+delta is derived, not hand-kept, the same command is the drift-guard: re-run it after any lane apex
+change and it reports what was added or removed.
+
+```bash
+./sovereign-lane-surgeon allowed-deps -out /path/to/aosp -name myui         # preview the delta + wiring
+./sovereign-lane-surgeon allowed-deps -out /path/to/aosp -name myui -apply   # commit; stock left untouched
+```
+
 ## It checks its own work
 
 Every defect this port hit was a seed that *looked* complete and failed 25 to 46 minutes into a
@@ -133,8 +155,8 @@ The full sequence, with what each step measured on cheetah, is on the wiki's
 | `audit`, `verify`, `doctor` | classify a failed build against the blocker taxonomy |
 
 The lane commands (`create` without `-stock`, plus `apply`, `uninstall`, `requalify`,
-`rename-module`, `drop-dep` and `reexport`) are documented in [LANES.md](LANES.md).
-`sovereign-lane-surgeon help` prints the full usage.
+`rename-module`, `drop-dep`, `reexport`, `undefined-deps` and `allowed-deps`) are documented in
+[LANES.md](LANES.md). `sovereign-lane-surgeon help` prints the full usage.
 
 ## Why this repository is large
 

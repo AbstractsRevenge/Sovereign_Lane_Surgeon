@@ -52,6 +52,16 @@ principles:
   the Blueprint `srcs` that name it. Three devices ship both a 32-bit and a 64-bit copy of the
   same library, and only the consumers say which goes where.
 
+The `allowed-deps` lane subcommand is the same idea on a third surface. A lane that forks an
+updatable apex must allow-list that apex's dependencies, and the check reads the allow-list from a
+**raw source path** the lane finder cannot route — so left alone, the lane would edit stock. Rather
+than hand-keep a copy, the tool **derives the lane delta** from a build: the entries in the build's
+computed `new-allowed-deps.txt` that pristine stock does not already carry. That delta is written to
+`packages-<lane>/modules/common/build/allowed_deps.txt`, wired via `EXTRA_ALLOWED_DEPS_TXT` (which
+Soong unions with stock before the diff), and inherited by each lane device product — stock stays
+pristine. Because the delta is derived, the same command re-run is the drift-guard: it reports every
+entry a lane apex change added or removed. Proven on the Holo lane as a 4-entry delta.
+
 ## AST, not regular expressions
 
 Blueprint files are edited through the canonical Blueprint parser, vendored because upstream

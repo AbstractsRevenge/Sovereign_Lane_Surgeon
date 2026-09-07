@@ -82,6 +82,8 @@ func main() {
 		os.Exit(cmdReexport(args))
 	case "undefined-deps":
 		os.Exit(cmdUndefinedDeps(args))
+	case "allowed-deps":
+		os.Exit(cmdAllowedDeps(args))
 	case "doctor":
 		os.Exit(cmdDoctor(args))
 	case "fetch-factory-image":
@@ -159,6 +161,15 @@ SUBCOMMANDS:
                                nothing will define once the finder routes the lane (stock parallels of lane
                                bps and manifest-dropped bps excluded). Lists the whole class at once instead of
                                one "depends on undefined module" per Soong run.
+  allowed-deps -out <r> [-name <l>] [-computed <f>] [-apply]  Make the lane SOVEREIGN over its apex
+                               allowed-deps. The apex-allowed-deps check reads stock allowed_deps.txt by a
+                               RAW SOURCE PATH the finder can't route, so a lane's forked updatable apexes
+                               would force edits into stock. Instead this derives the lane DELTA (a build's
+                               computed new-allowed-deps.txt MINUS pristine stock) into
+                               packages-<lane>/modules/common/build/allowed_deps.txt, writes the sibling
+                               allowed_deps.mk (EXTRA_ALLOWED_DEPS_TXT, unioned in by Soong), and inherits it
+                               into each lane device product — leaving stock PRISTINE. Preview unless -apply.
+                               Doubles as the drift-guard: re-run after any lane apex change.
   doctor  -report <dir|json>   Per classified failure, print (or apply) its recipe (§23.2).
   fetch-factory-image -device <name> -out <dir>  Download+extract a Google Pixel factory image
                                (known: the 16 cp2a devices with an AOSP tree — Pixel 6 … Pixel 9a) from a hand-verified

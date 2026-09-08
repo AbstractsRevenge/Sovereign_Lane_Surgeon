@@ -82,6 +82,8 @@ func main() {
 		os.Exit(cmdReexport(args))
 	case "undefined-deps":
 		os.Exit(cmdUndefinedDeps(args))
+	case "dep-ledger":
+		os.Exit(cmdDepLedger(args))
 	case "allowed-deps":
 		os.Exit(cmdAllowedDeps(args))
 	case "doctor":
@@ -161,6 +163,11 @@ SUBCOMMANDS:
                                nothing will define once the finder routes the lane (stock parallels of lane
                                bps and manifest-dropped bps excluded). Lists the whole class at once instead of
                                one "depends on undefined module" per Soong run.
+  dep-ledger -name <l> -out <r> [-oracle holo] [-json]  Classify the undefined-deps census into an actionable
+                               worklist: REPOINT (lane forks it renamed) / LOAD (lane owns keep-name, bp not
+                               loaded) / FORK (green oracle forks it, lane missing) / STOCK-GAP (stock defines
+                               it, not routed) / LANE-BUG (own-module casing) / DEAD (retired) / MISSING; flags
+                               test-only refs. The fork-vs-share call is delegated to a proven-green oracle lane.
   allowed-deps -out <r> [-name <l>] [-computed <f>] [-apply]  Make the lane SOVEREIGN over its apex
                                allowed-deps. The apex-allowed-deps check reads stock allowed_deps.txt by a
                                RAW SOURCE PATH the finder can't route, so a lane's forked updatable apexes

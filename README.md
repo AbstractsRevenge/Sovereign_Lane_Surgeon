@@ -97,6 +97,40 @@ change and it reports what was added or removed.
 ./sovereign-lane-surgeon allowed-deps -out /path/to/aosp -name myui -apply   # commit; stock left untouched
 ```
 
+### Undefined-dependency ledger
+
+Landing a lane whose delta came from another Android version — or a rename-model lane, whose modules
+carry distinct names rather than keeping stock's — surfaces a *class* of "depends on undefined module"
+errors that Soong otherwise reports one at a time, each costing a full analysis run to find. `undefined-deps`
+lists the whole class in one AST census: every dependency name the lane's `Android.bp` files reference that
+nothing will define once the finder has routed the lane. Derived names — `java_sdk_library` stubs,
+`aidl_interface` backends, aconfig libraries — are resolved to their declared base, so real gaps are not
+buried under hundreds of false ones.
+
+`dep-ledger` classifies that census into an actionable worklist, so the gaps sort themselves into fixes
+instead of a flat list:
+
+| Disposition | Meaning → fix |
+|---|---|
+| `LOAD` | the lane owns it keep-name, but the defining `.bp` is not wired in (missing `build =` include) → wire it |
+| `REPOINT` | the lane forks it under a renamed form → route the reference to the lane module |
+| `FORK` | a proven-green reference lane forks it and this one does not → author the keep-name fork |
+| `STOCK-GAP` | stock defines it but it is not resolving for the lane → route or keep-name |
+| `LANE-BUG` | the reference names the lane's own module with the wrong casing → fix in-lane |
+| `DEAD` | retired scaffolding → drop the reference |
+| `MISSING` | defined nowhere → a removed module → drop |
+
+The fork-vs-provide call is not a heuristic: it is delegated to a **proven-green reference lane** via the
+`-oracle` flag — if a lane that already builds forks a module, the lane under audit should provide it too;
+if only stock defines it, the gap is routing, not a missing fork. Each row is flagged test-only when every
+reference lives under a `tests/` dir, so image-gating gaps sort ahead of the rest.
+
+```bash
+./sovereign-lane-surgeon undefined-deps -name myui -out /path/to/aosp                    # the raw AST census
+./sovereign-lane-surgeon dep-ledger    -name myui -out /path/to/aosp -oracle green-lane  # classified worklist
+./sovereign-lane-surgeon dep-ledger    -name myui -out /path/to/aosp -json               # machine-readable
+```
+
 ## It checks its own work
 
 Every defect this port hit was a seed that *looked* complete and failed 25 to 46 minutes into a
@@ -155,7 +189,7 @@ The full sequence, with what each step measured on cheetah, is on the wiki's
 | `audit`, `verify`, `doctor` | classify a failed build against the blocker taxonomy |
 
 The lane commands (`create` without `-stock`, plus `apply`, `uninstall`, `requalify`,
-`rename-module`, `drop-dep`, `reexport`, `undefined-deps` and `allowed-deps`) are documented in
+`rename-module`, `drop-dep`, `reexport`, `undefined-deps`, `dep-ledger` and `allowed-deps`) are documented in
 [LANES.md](LANES.md). `sovereign-lane-surgeon help` prints the full usage.
 
 ## Why this repository is large

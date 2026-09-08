@@ -17,7 +17,7 @@ limitations under the License.
 
 # Sovereign Lane Surgeon - Current State
 
-**Last Updated:** 2026-09-04 03:10 UTC  
+**Last Updated:** 2026-09-08 UTC  
 **Version:** v1.0.0  
 **Status:** **Port complete for every SoC generation cp2a ships.** All 16 devices `m nothing` green from `create -stock` alone; 9 full images (gs201 ×5, gs101, zuma, zumapro ×2 incl. the r31 tegu tree), every one `preflight` FLASHABLE; **cheetah boots the Surgeon-built android-17 image** — first 2026-09-03 01:12 UTC, re-proven 07:11 UTC on the build's **own** complete super. Seven siblings deferred by decision (no test devices). Next horizon: Holo transformations.  
 
@@ -124,6 +124,16 @@ The Sovereign Lane Surgeon is a self-contained Go toolkit for creating parallel 
 ### Secondary Task: Documentation
 - [x] README, CURRENT_STATE, port changelog current as of 2026-09-03
 - [x] Known limitations and workarounds documented below
+- [x] `undefined-deps` + `dep-ledger` documented in README (2026-09-08)
+
+### Refining: rename-model lane baseline-green
+The lane-sovereignty half of the toolkit is being sharpened against a **rename-model derived lane** —
+one whose modules carry distinct names rather than keeping stock's, landed on a fresh AOSP tree. The
+workflow being perfected: bring such a lane to a fresh-green `m nothing` by taking its entire
+undefined-dependency surface as one AST census (`undefined-deps`) and classifying it into an actionable
+worklist (`dep-ledger`) — LOAD / REPOINT / FORK / STOCK-GAP / LANE-BUG / DEAD — with the fork-vs-provide
+decision delegated to a proven-green reference lane. Both instruments landed 2026-09-08; the loop that
+drives a derived lane to a baseline-green build with them is the current focus.
 
 ---
 

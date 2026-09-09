@@ -131,6 +131,32 @@ reference lives under a `tests/` dir, so image-gating gaps sort ahead of the res
 ./sovereign-lane-surgeon dep-ledger    -name myui -out /path/to/aosp -json               # machine-readable
 ```
 
+### Rename vs keep-name: the rule the dispositions encode
+
+A rename-model lane's central decision — for each module, rename it and repoint every reference, or keep
+its stock name — is not a style choice; it is forced by one sovereignty rule: **a lane may rename a module
+only when it owns every consumer of it.** A module a lane forks but whose consumers include *kept-stock*
+siblings — a stock test, a vendor overlay, a prebuilt the finder keeps — cannot be renamed, because those
+consumers reference it by its stock name and the lane cannot repoint them; it must be **keep-name**. This is
+why the ledger's `FORK`/`LOAD` rows resolve to keep-name forks and `REPOINT` is only ever safe for a module
+the lane fully owns. Two classes are always keep-name for a deeper reason: Soong *derives* their dependent
+names (`java_sdk_library` `.stubs.*`, `aidl_interface` `-V<n>-<backend>`, `bootstrap_go_package`), and
+`license` and shared build-defaults modules are referenced by name tree-wide.
+
+A common, high-yield case: when a lane fork **replaces** its stock parallel (the finder drops the stock
+file) but the fork *dropped* a shared module its own or kept-stock consumers still need — a build-defaults,
+a `license`, a framework `java_sdk_library`, an aggregate library and its umbrella defaults — the fix is to
+**seed that module back into the lane keep-name from stock**, repoint only its internals to lane forms, and
+leave stock pristine. A proven-green reference lane is the oracle for the keep-name-vs-rename call; and the
+same seed that fixes the build clears any stock-purity visibility grant the lane had previously stamped into
+stock to work around the gap, so stock returns to upstream-tracking.
+
+Three reference sites sit **outside** what the `.bp`-editing passes reach, so a rename must handle them out
+of band: modules pulled in by a `build = [...]` subfile include (seen only if the pass walks every `.bp`,
+not just files named `Android.bp`); module names hardcoded as Go constants or string literals inside a Soong
+plugin (`api.go`-style); and the `aidl_api/<name>/` frozen-dump **directory**, which a renamed
+`aidl_interface` must rename in lockstep or its versioned backend never generates.
+
 ## It checks its own work
 
 Every defect this port hit was a seed that *looked* complete and failed 25 to 46 minutes into a

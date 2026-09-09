@@ -125,6 +125,7 @@ The Sovereign Lane Surgeon is a self-contained Go toolkit for creating parallel 
 - [x] README, CURRENT_STATE, port changelog current as of 2026-09-03
 - [x] Known limitations and workarounds documented below
 - [x] `undefined-deps` + `dep-ledger` documented in README (2026-09-08)
+- [x] rename-vs-keep-name rule, seed-from-stock class, and the three `.bp`-unreachable rewrite sites documented (2026-09-09)
 
 ### Refining: rename-model lane baseline-green
 The lane-sovereignty half of the toolkit is being sharpened against a **rename-model derived lane** —
@@ -132,8 +133,26 @@ one whose modules carry distinct names rather than keeping stock's, landed on a 
 workflow being perfected: bring such a lane to a fresh-green `m nothing` by taking its entire
 undefined-dependency surface as one AST census (`undefined-deps`) and classifying it into an actionable
 worklist (`dep-ledger`) — LOAD / REPOINT / FORK / STOCK-GAP / LANE-BUG / DEAD — with the fork-vs-provide
-decision delegated to a proven-green reference lane. Both instruments landed 2026-09-08; the loop that
-drives a derived lane to a baseline-green build with them is the current focus.
+decision delegated to a proven-green reference lane.
+
+Driving one such lane down its census (2026-09-08/09) proved out a single dominant class and its fix. When
+a lane fork **replaces** its stock parallel (the finder drops the stock file) but the fork dropped a shared
+module its own or kept-stock consumers still reference — a build-defaults, a `license`, a framework
+`java_sdk_library`, an aggregate library and its umbrella defaults — the sovereign fix is to **seed that
+module back into the lane keep-name from stock**, repoint only its internals to lane forms, and leave stock
+pristine. A proven-green reference lane is the oracle for the keep-name-vs-rename call; the same seed that
+fixes the build clears any stock-purity visibility grant the lane had previously stamped into stock to work
+around the gap, so stock returns to upstream-tracking. The governing rule the dispositions encode: **a lane
+may rename a module only when it owns every consumer** — a module with kept-stock consumers (a vendor
+overlay, a prebuilt, a stock test the finder keeps) is keep-name, because those consumers reference it by
+stock name and cannot be repointed. This class drove one lane's analysis gate from dozens of errors to a
+single remaining wall, each seed verified by `m nothing`.
+
+One architectural sub-case is open by design: the framework **resources** module. A lane that renamed it
+rather than keeping its stock name strands every kept-stock/vendor/prebuilt consumer (device RRO overlays,
+GMS prebuilt AARs) that references it by stock name; the resolution — keep-name it (as a keep-name lane
+does) versus a finder/analysis-time redirect that preserves the rename — is a per-lane decision with
+runtime-install and boot-jar machinery attached, taken deliberately rather than by the census loop.
 
 ---
 
@@ -150,6 +169,7 @@ drives a derived lane to a baseline-green build with them is the current focus.
 | Firmware flash is manual | A vendor on older bootloader/baseband dies at ~65 s with no log | `flash_<device>.sh` prints the required versions and the two fastboot commands; the tool never flashes firmware |
 | Camera on T's cheetah | provider crash-loops (KRAKEN I2C ENXIO) | hardware fault of the unit — identical on stock |
 | Sudo required for mount | Only when `debugfs` is absent | Install e2fsprogs; `debugfs rdump` is tried first and needs no root |
+| Rename passes rewrite `.bp` module refs only | A rename must also fix refs that live outside `.bp`: `build = [...]` subfile modules, module names hardcoded in a Soong Go plugin (`api.go`), and `aidl_api/<name>/` frozen-dump dirs | Walk every `.bp` (not just `Android.bp`) in the rename/repoint passes; handle the Go-plugin refs and the dump-dir rename out of band, keyed to the rename map |
 
 ### Future Enhancements
 

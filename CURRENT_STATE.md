@@ -143,9 +143,13 @@ module back into the lane keep-name from stock**, repoint only its internals to 
 pristine. A proven-green reference lane is the oracle for the keep-name-vs-rename call; the same seed that
 fixes the build clears any stock-purity visibility grant the lane had previously stamped into stock to work
 around the gap, so stock returns to upstream-tracking. The governing rule the dispositions encode: **a lane
-may rename a module only when it owns every consumer** — a module with kept-stock consumers (a vendor
-overlay, a prebuilt, a stock test the finder keeps) is keep-name, because those consumers reference it by
-stock name and cannot be repointed. This class drove one lane's analysis gate from dozens of errors to a
+may rename a module only when it owns every consumer** — a module with a *legitimate* kept-stock consumer (a
+vendor overlay, a prebuilt, a stock test the finder keeps, genuinely needed off-fork) is keep-name, because
+that consumer references it by stock name and cannot be repointed. The sharpening that matters at scale: a
+kept-stock consumer that is *dead weight* — an additive parallel the lane never uses and nothing off-fork
+consumes — is not a reason to keep-name; it is a reason to **drop** the stale bp (drop-list repair), after
+which the lane owns every remaining consumer and the rename stands. Legitimate-keep-name vs dead-weight-drop
+at scale is the drop-list / off-fork-index decision. This class drove one lane's analysis gate from dozens of errors to a
 single remaining wall, each seed verified by `m nothing`.
 
 One architectural sub-case is open by design: the framework **resources** module. A lane that renamed it

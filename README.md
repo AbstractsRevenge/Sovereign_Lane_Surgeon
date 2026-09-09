@@ -137,7 +137,12 @@ A rename-model lane's central decision — for each module, rename it and repoin
 its stock name — is not a style choice; it is forced by one sovereignty rule: **a lane may rename a module
 only when it owns every consumer of it.** A module a lane forks but whose consumers include *kept-stock*
 siblings — a stock test, a vendor overlay, a prebuilt the finder keeps — cannot be renamed, because those
-consumers reference it by its stock name and the lane cannot repoint them; it must be **keep-name**. This is
+consumers reference it by its stock name and the lane cannot repoint them; it must be **keep-name** — *when
+that kept-stock consumer is legitimate* (genuinely needed off-fork). A kept-stock consumer that is dead
+weight — an additive parallel the lane never uses and nothing off-fork consumes (verify: non-test, no
+off-fork reference) — is not a reason to keep-name; it is the reason to **drop** that stale `.bp`, after
+which the lane owns every remaining consumer and the rename stands. Telling legitimate-keep-name from
+dead-weight-drop at scale is the drop-list / off-fork-index call. This is
 why the ledger's `FORK`/`LOAD` rows resolve to keep-name forks and `REPOINT` is only ever safe for a module
 the lane fully owns. Two classes are always keep-name for a deeper reason: Soong *derives* their dependent
 names (`java_sdk_library` `.stubs.*`, `aidl_interface` `-V<n>-<backend>`, `bootstrap_go_package`), and

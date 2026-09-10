@@ -21,11 +21,10 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"strings"
 )
 
 // refreshmanifest.go — the `refresh-manifest` subcommand: recompute an already-seeded lane's route-manifest
-// AST-derived fields (stock_var_definer_bps, stock_infork_only_bps) IN PLACE, without re-forking, while
+// AST-derived fields (stock_var_definer_bps) IN PLACE, without re-forking, while
 // preserving the seed's curated dropped_namespace_decl_paths / kept_stock_bp_paths. This lets a keep-vs-drop
 // or var-scope rule change take effect on a lane already on disk by regenerating just the manifest.
 func cmdRefreshManifest(args []string) int {
@@ -36,10 +35,6 @@ func cmdRefreshManifest(args []string) int {
 	if *name == "" || *out == "" {
 		fmt.Fprintln(os.Stderr, "refresh-manifest: -name and -out are required")
 		return 2
-	}
-	camel := *name
-	if *name != "" {
-		camel = strings.ToUpper((*name)[:1]) + (*name)[1:]
 	}
 	path := filepath.Join(*out, "."+*name, *name+"_bp_route_manifest.json")
 	b, err := os.ReadFile(path)
@@ -53,7 +48,6 @@ func cmdRefreshManifest(args []string) int {
 		return 1
 	}
 	m.StockVarDefinerBps = stockVarDefinerBps(*name, *out)
-	m.StockInForkOnlyBps = stockInForkOnlyBps(*name, camel, *out)
 	nb, err := json.MarshalIndent(m, "", "  ")
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "refresh-manifest: marshal:", err)
@@ -63,7 +57,7 @@ func cmdRefreshManifest(args []string) int {
 		fmt.Fprintln(os.Stderr, "refresh-manifest: write:", err)
 		return 1
 	}
-	fmt.Printf("refresh-manifest: %s updated — %d var-definer bps, %d in-fork-only drops\n",
-		*name, len(m.StockVarDefinerBps), len(m.StockInForkOnlyBps))
+	fmt.Printf("refresh-manifest: %s updated — %d var-definer bps\n",
+		*name, len(m.StockVarDefinerBps))
 	return 0
 }

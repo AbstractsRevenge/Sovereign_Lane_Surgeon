@@ -40,15 +40,15 @@ java_library {
 		t.Fatal("expected changed")
 	}
 	s := string(out)
-	if !strings.Contains(s, `name: "Testing1SystemUI"`) {
-		t.Errorf("app not renamed:\n%s", s)
+	if !strings.Contains(s, `name: "SystemUITesting1"`) {
+		t.Errorf("app not renamed (suffix model <Stock><Camel>):\n%s", s)
 	}
 	if !strings.Contains(s, `overrides: ["SystemUI"]`) {
 		t.Errorf("overrides not injected:\n%s", s)
 	}
 	// framework-res is an android_app but framework-class → tier 1 must SKIP it (tier 3 owns it)
 	fr, _, _ := renameInstallableBp([]byte("android_app {\n    name: \"framework-res\",\n}\n"), "Testing1")
-	if strings.Contains(string(fr), "Testing1framework-res") {
+	if strings.Contains(string(fr), "framework-resTesting1") {
 		t.Error("tier 1 must not rename framework-res (framework class)")
 	}
 	// java_library (not installable) untouched

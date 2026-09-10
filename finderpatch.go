@@ -86,10 +86,6 @@ var finderSharedTmpl = template.Must(template.New("findershared").Parse(
 		"\t// apply{{.Camel}}BpRoutes drops such a stock bp it drops the whole stock subtree beneath it,\n" +
 		"\t// else a kept stock referencer child is orphaned (\"undefined variable\" at bootstrap).\n" +
 		"\tStockVarDefinerBps []string `json:\"stock_var_definer_bps\"`\n" +
-		"\t// StockInForkOnlyBps are additive-keep stock parallels the finder DROPS as in-fork dead weight\n" +
-		"\t// (every module their all-Camel lane parallel shadows is referenced only inside the fork);\n" +
-		"\t// AST-computed at seed, so nothing an off-fork consumer needs is dropped. See apply{{.Camel}}BpRoutes.\n" +
-		"\tStockInForkOnlyBps []string `json:\"stock_infork_only_bps\"`\n" +
 		"\t// OwnedNamespaceBps are lane namespace-decl bps the finder KEEPS namespaced+loaded (not dropped to\n" +
 		"\t// the stock parallel) — a namespaced module the lane OWNS with no off-fork consumer and a\n" +
 		"\t// load-bearing namespace (e.g. native_bridge_support guest libc). Complements the /pods/ rule.\n" +
@@ -165,13 +161,6 @@ func apply{{.Camel}}BpRoutes(ctx Context, config Config, androidBps []string) []
 	if manifest != nil {
 		for _, decl := range manifest.DroppedNamespaceDeclPaths {
 			toDrop[decl] = true
-		}
-		// Out-of-fork keep-vs-drop (Workstream A): additive-keep stock parallels whose modules are
-		// referenced only inside the fork are in-fork dead weight — drop them so they can't dangle on a
-		// dropped-replacement dependency. Precomputed at seed (stock_infork_only_bps); a stock parallel
-		// with any off-fork consumer is never listed, so keep-name modules the un-forked tree needs stay.
-		for _, bp := range manifest.StockInForkOnlyBps {
-			toDrop[bp] = true
 		}
 		for _, bp := range manifest.OwnedNamespaceBps {
 			owned[bp] = true
@@ -286,37 +275,14 @@ func deprefix{{.Camel}}IdentitySegment(path string) string {
 	return path
 }
 
-// {{.Lane}}ForkKeepsStock reports whether a lane bp is ADDITIVE-only — every declared module name starts
-// with the CamelCase shared-infra prefix "{{.Camel}}" — in which case its stock parallel is KEPT. A bp
-// with any keep-name (non-"{{.Camel}}") module — including an identity-app {{.DirPrefix}}<App> bp whose
-// internal test/license modules are keep-name — is a REPLACEMENT, so its stock parallel is dropped.
-// Unreadable → replacement (drop). Additive-keep is load-bearing: UN-FORKED consumers (external/, system/,
-// device/) reference these stock modules (shared _defaults etc.) by stock name, so dropping them breaks
-// the un-forked tree — a whole-root fork does NOT make them redundant.
+// {{.Lane}}ForkKeepsStock ALWAYS returns false: a lane bp cleanly REPLACES its stock parallel, the
+// proven keep-name applyHoloBpRoutes model. The former "additive-keep" (keep the stock parallel when
+// every declared module is {{.Camel}}-prefixed) was the ROOT of the duplicate↔missing-default churn —
+// it made Soong parse stock AND lane copies, so a kept stock child dangled on a dropped-replacement
+// parent. Off-fork-referenced modules stay resolvable via KEEP-NAME (keepname-offork un-renames the
+// module), NOT by keeping the whole stock bp. Retained as a function only for call-site stability.
 func {{.Lane}}ForkKeepsStock(bp string) bool {
-	contents, err := os.ReadFile(bp)
-	if err != nil {
-		return false
-	}
-	for _, line := range strings.Split(string(contents), "\n") {
-		t := strings.TrimSpace(line)
-		if !strings.HasPrefix(t, "name:") {
-			continue
-		}
-		q := strings.Index(t, "\"")
-		if q < 0 {
-			continue
-		}
-		rest := t[q+1:]
-		e := strings.Index(rest, "\"")
-		if e < 0 {
-			continue
-		}
-		if name := rest[:e]; !strings.HasPrefix(name, "{{.Camel}}") {
-			return false
-		}
-	}
-	return true
+	return false
 }
 
 // is{{.Camel}}OwnedNamespaceBp reports whether a lane namespace-decl bp must stay NAMESPACED (not

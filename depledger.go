@@ -83,12 +83,14 @@ func wrongCasedSelfRef(name, camel string) bool {
 		strings.EqualFold(n[:len(camel)], camel) && n[:len(camel)] != camel
 }
 
-// renameForms are the ways a rename-model lane may have re-declared a canonical module name, given the
-// lane's CamelCase installable prefix (camel, e.g. "Holo2"/"NexusM") and lowercase lib prefix (lower,
-// e.g. "holo2"/"nexusm"). It never returns the identity name — only genuinely-renamed forms — so a
-// keep-name module the lane owns is classified LOAD (its bp isn't loaded), not mistaken for a REPOINT.
+// renameForms are the ways a rename-model lane may have re-declared a canonical module name under the
+// SUFFIX model: apps <Name><Camel> (SettingsHolo2), libs/filegroups <name>_<lower> (foo_holo2), and
+// framework-class <name>-<lower> (framework-location-holo2). camel is the CamelCase suffix (e.g.
+// "Holo2"/"NexusM"), lower the lowercase suffix (e.g. "holo2"/"nexusm"). It never returns the identity
+// name — only genuinely-renamed forms — so a keep-name module the lane owns is classified LOAD (its bp
+// isn't loaded), not mistaken for a REPOINT.
 func renameForms(name, camel, lower string) []string {
-	forms := []string{camel + name, lower + "-" + name, name + "-" + lower}
+	forms := []string{name + camel, name + "_" + lower, name + "-" + lower}
 	if r := strings.Replace(name, "com.android.", lower+"-", 1); r != name {
 		forms = append(forms, r)
 	}

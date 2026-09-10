@@ -69,13 +69,13 @@ func renameInstallableBp(content []byte, camel string) ([]byte, bool, error) {
 			continue
 		}
 		stock := ns.Value
-		if strings.HasPrefix(stock, camel) {
-			continue // already renamed — idempotent
+		if strings.HasSuffix(stock, camel) {
+			continue // already renamed — idempotent (suffix model: <Stock><Camel>)
 		}
 		if _, isFwc := frameworkClassStem[stock]; isFwc {
 			continue // framework class (e.g. framework-res is an android_app) → tier 3, not tier 1
 		}
-		ns.Value = camel + stock
+		ns.Value = stock + camel
 		// Inject overrides:["<stock>"] so the renamed lane app suppresses the stock variant.
 		if overridesProp == nil {
 			m.Properties = append(m.Properties, &parser.Property{
@@ -383,8 +383,8 @@ func collectLibRenames(outRoot string, c LaneConfig) map[string]string {
 					}
 					if ns, ok := pr.Value.(*parser.String); ok {
 						n := ns.Value
-						if !frameworkClassNames[n] && !strings.HasPrefix(n, c.CamelCase) {
-							m[n] = c.CamelCase + n
+						if !frameworkClassNames[n] && !strings.HasSuffix(n, "_"+c.Name) {
+							m[n] = n + "_" + c.Name
 						}
 					}
 				}

@@ -186,11 +186,6 @@ type routeManifest struct {
 	// by stockVarDefinerBps). The generated finder drops the whole stock subtree under any of these it
 	// drops, so a kept stock referencer child is never orphaned from a dropped definer parent.
 	StockVarDefinerBps []string `json:"stock_var_definer_bps"`
-	// StockInForkOnlyBps are additive-keep stock parallels the finder must DROP because every module
-	// their all-Camel lane parallel shadows is referenced only from INSIDE the fork — in-fork dead weight
-	// that dangles on dropped-replacement deps. AST-computed at seed by stockInForkOnlyBps (bpModules +
-	// depNamesInBp over the un-forked roots). A stock module referenced off-fork is never listed.
-	StockInForkOnlyBps []string `json:"stock_infork_only_bps"`
 	// OwnedNamespaceBps are lane namespace-decl bps the finder must KEEP namespaced+loaded (not drop to
 	// the stock parallel), for a namespaced module the lane genuinely OWNS: it has no off-fork consumer
 	// (so no stock label needs to resolve) and its namespace is load-bearing (e.g. native_bridge_support's
@@ -305,7 +300,6 @@ func emitRouteManifestFrom(lane, camel, outRoot, srcLane string) ([]byte, error)
 		AddedNamespaceDeclPaths:   []string{},
 		KeptStockBpPaths:          []string{},
 		StockVarDefinerBps:        stockVarDefinerBps(lane, outRoot),
-		StockInForkOnlyBps:        stockInForkOnlyBps(lane, camel, outRoot),
 		DerivedFrom:               srcLane,
 	}
 	return json.MarshalIndent(m, "", "  ")

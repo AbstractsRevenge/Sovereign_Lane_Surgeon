@@ -146,56 +146,10 @@ func bpAllLaneNamed(path, camel string) bool {
 	return true
 }
 
-// stockInForkOnlyBps returns the STOCK bp paths the finder's additive-keep would KEEP but that are
-// in-fork DEAD WEIGHT: every module their all-Camel lane parallel additively shadows is referenced ONLY
-// from inside the fork, where consumers already resolve the lane's Camel names. Keeping such a stock
-// parallel is redundant and dangles it on any dropped-replacement dependency (the _defaults class). The
-// finder drops these on top of its normal replacement drops. A stock module referenced from ANY un-forked
-// path is never listed — so nothing an out-of-fork consumer needs is dropped. This is the reference-test
-// that generalizes the fragile per-module var-guard: keep a stock parallel iff it is reachable off-fork.
-func stockInForkOnlyBps(lane, camel, outRoot string) []string {
-	if outRoot == "" || camel == "" {
-		return nil
-	}
-	unforked := unforkedRefIndex(outRoot)
-	seen := map[string]bool{}
-	var drop []string
-	for _, r := range []struct{ laneDir, stockDir string }{
-		{"frameworks-" + lane, "frameworks"},
-		{"packages-" + lane, "packages"},
-	} {
-		root := filepath.Join(outRoot, r.laneDir)
-		_ = filepath.WalkDir(root, func(p string, d fs.DirEntry, err error) error {
-			if err != nil || d.IsDir() || d.Name() != "Android.bp" {
-				return nil
-			}
-			if !bpAllLaneNamed(p, camel) {
-				return nil // not additive → a replacement; its stock parallel already drops
-			}
-			rel, relErr := filepath.Rel(root, p)
-			if relErr != nil {
-				return nil
-			}
-			stockNames, _ := bpModules(filepath.Join(outRoot, r.stockDir, rel))
-			if len(stockNames) == 0 {
-				return nil // no stock parallel (or empty) → nothing to drop
-			}
-			for m := range stockNames {
-				if unforked[m] {
-					return nil // referenced off-fork → KEEP the stock parallel
-				}
-			}
-			stockRel := r.stockDir + "/" + filepath.ToSlash(rel)
-			if !seen[stockRel] {
-				seen[stockRel] = true
-				drop = append(drop, stockRel)
-			}
-			return nil
-		})
-	}
-	sort.Strings(drop)
-	return drop
-}
+// (Removed: stockInForkOnlyBps — the additive-keep infork-only DROP mechanism. Superseded by clean
+// per-file replacement ({{.Lane}}ForkKeepsStock=false); a forked bp now drops its stock parallel
+// directly, so there is no additive-kept parallel left to prune. unforkedRefIndex is retained for the
+// rename-side keep-name pass (keepname-offork).)
 
 // offForkReferenced reports whether a stock module name, or any of its Soong-derived forms (X-cpp,
 // X.stubs.module_lib, X-aconfig-java, …), appears in the off-fork reference index — i.e. some un-forked

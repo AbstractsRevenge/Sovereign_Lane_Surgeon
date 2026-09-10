@@ -1,4 +1,5 @@
 // Copyright 2026 Terrance Leverette (AbstractsRevenge)
+// Sovereign Lane Surgeon: https://github.com/AbstractsRevenge/Sovereign_Lane_Surgeon
 // Licensed under the Apache License, Version 2.0.
 
 package main
@@ -15,11 +16,11 @@ func set(names ...string) map[string]bool {
 
 func TestClassifyDep(t *testing.T) {
 	cases := []struct {
-		name       string
-		lane       map[string]bool
-		oracle     map[string]bool
-		stock      map[string]bool
-		wantDisp   string
+		name     string
+		lane     map[string]bool
+		oracle   map[string]bool
+		stock    map[string]bool
+		wantDisp string
 	}{
 		// LANE-BUG: lane's own module, lowercase-m casing.
 		{"Nexusmframework-core-sources", set(), set(), set(), "LANE-BUG"},

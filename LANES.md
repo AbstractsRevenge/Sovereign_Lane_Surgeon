@@ -508,5 +508,6 @@ The lane toolkit includes specialized subcommands for audit and repair:
 - `set-prop`: Sets property values in lane Blueprints.
 - `fix-lane-defects`: Applies curated defect fixes to forked build tools.
 - `repoint-rust-use`: Repoints Rust crate references in source files.
+- `convert-suffix`: Converts an existing prefix-renamed rename lane to the SUFFIX model in place (apps `<base><Camel>`, libs `<base>_<lower>`) without re-seeding; the strip prefix may differ from the appended suffix to support a lane migration (e.g. `NexusM`-prefix → `Nexus`-suffix).
 - `ignore-missing-latest-api`: Suppresses missing latest API checks.
 

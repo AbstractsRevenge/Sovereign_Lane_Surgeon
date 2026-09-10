@@ -76,6 +76,8 @@ func main() {
 		os.Exit(cmdRequalify(args))
 	case "rename-module":
 		os.Exit(cmdRenameModule(args))
+	case "convert-suffix":
+		os.Exit(cmdConvertSuffix(args))
 	case "drop-dep":
 		os.Exit(cmdDropDep(args))
 	case "reexport":
@@ -187,6 +189,9 @@ SUBCOMMANDS:
   set-prop -name <l> -out <r> -prop <p> -val <v> [-apply]  Set property values in lane Blueprints.
   fix-lane-defects -name <l> -out <r>  Apply curated defect fixes to forked build tools.
   repoint-rust-use -name <l> -out <r> -map <map> [-apply]  Repoint Rust crate references in source files.
+  convert-suffix -name <l> -out <r> [-strip <p>] [-camel <C>] [-lower <c>] [-apply]  Convert an existing
+                               prefix-renamed rename lane to the SUFFIX model in place (apps <base><Camel>,
+                               libs <base>_<lower>); strip token may differ from suffix (lane migration).
   ignore-missing-latest-api -out <r>  Suppress missing latest API checks.
   allowed-deps -out <r> [-name <l>] [-computed <f>] [-apply]  Make the lane SOVEREIGN over its apex
                                allowed-deps. The apex-allowed-deps check reads stock allowed_deps.txt by a

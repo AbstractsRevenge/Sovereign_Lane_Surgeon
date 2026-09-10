@@ -81,6 +81,19 @@ var finderSharedTmpl = template.Must(template.New("findershared").Parse(
 		"\t// cannot collide and dropping it loses modules the tree still references. Written by\n" +
 		"\t// `govern route-curate` (UX Design Governance); honored here so the two toolkits share one manifest.\n" +
 		"\tKeptStockBpPaths []string `json:\"kept_stock_bp_paths\"`\n" +
+		"\t// StockVarDefinerBps are stock bps declaring a top-level blueprint VARIABLE (AST-computed at\n" +
+		"\t// seed by the Surgeon). A top-level var is scoped to its file + subdir bps, so when\n" +
+		"\t// apply{{.Camel}}BpRoutes drops such a stock bp it drops the whole stock subtree beneath it,\n" +
+		"\t// else a kept stock referencer child is orphaned (\"undefined variable\" at bootstrap).\n" +
+		"\tStockVarDefinerBps []string `json:\"stock_var_definer_bps\"`\n" +
+		"\t// StockInForkOnlyBps are additive-keep stock parallels the finder DROPS as in-fork dead weight\n" +
+		"\t// (every module their all-Camel lane parallel shadows is referenced only inside the fork);\n" +
+		"\t// AST-computed at seed, so nothing an off-fork consumer needs is dropped. See apply{{.Camel}}BpRoutes.\n" +
+		"\tStockInForkOnlyBps []string `json:\"stock_infork_only_bps\"`\n" +
+		"\t// OwnedNamespaceBps are lane namespace-decl bps the finder KEEPS namespaced+loaded (not dropped to\n" +
+		"\t// the stock parallel) — a namespaced module the lane OWNS with no off-fork consumer and a\n" +
+		"\t// load-bearing namespace (e.g. native_bridge_support guest libc). Complements the /pods/ rule.\n" +
+		"\tOwnedNamespaceBps []string `json:\"owned_namespace_bps\"`\n" +
 		"}\n\n" +
 		"// load{{.Camel}}BpRouteManifest reads the {{.Lane}} lane's BP route manifest if available.\n" +
 		"// Returns nil (no error) when absent — optional infrastructure, identity transform. Fatal only\n" +
@@ -148,9 +161,20 @@ var finderRenameApplyTmpl = template.Must(template.New("renameapply").Parse(`// 
 func apply{{.Camel}}BpRoutes(ctx Context, config Config, androidBps []string) []string {
 	manifest := load{{.Camel}}BpRouteManifest(ctx, config)
 	toDrop := map[string]bool{}
+	owned := map[string]bool{}
 	if manifest != nil {
 		for _, decl := range manifest.DroppedNamespaceDeclPaths {
 			toDrop[decl] = true
+		}
+		// Out-of-fork keep-vs-drop (Workstream A): additive-keep stock parallels whose modules are
+		// referenced only inside the fork are in-fork dead weight — drop them so they can't dangle on a
+		// dropped-replacement dependency. Precomputed at seed (stock_infork_only_bps); a stock parallel
+		// with any off-fork consumer is never listed, so keep-name modules the un-forked tree needs stay.
+		for _, bp := range manifest.StockInForkOnlyBps {
+			toDrop[bp] = true
+		}
+		for _, bp := range manifest.OwnedNamespaceBps {
+			owned[bp] = true
 		}
 	}
 	for _, bp := range androidBps {
@@ -161,14 +185,44 @@ func apply{{.Camel}}BpRoutes(ctx Context, config Config, androidBps []string) []
 		if !strings.HasPrefix(bp, "frameworks{{.DirSuffix}}/") && !strings.HasPrefix(bp, "packages{{.DirSuffix}}/") {
 			continue
 		}
-		if bpDeclaresNamespace(bp) {
-			if !is{{.Camel}}OwnedNamespaceBp(bp) {
-				toDrop[bp] = true // collapse to root (framework-class AND packages{{.DirSuffix}} apps), Holo-style
-			}
+		if bpDeclaresNamespace(bp) && !is{{.Camel}}OwnedNamespaceBp(bp) && !owned[bp] {
+			toDrop[bp] = true // collapse to root (framework-class AND packages{{.DirSuffix}} apps), Holo-style
 			continue
+		}
+		if toDrop[bp] {
+			continue // namespace-collapse drop (lane bp removed); its stock parallel is kept
 		}
 		if mapped := existing{{.Camel}}StockParallel(bp); mapped != "" {
 			toDrop[mapped] = true
+		}
+	}
+	// Variable-scope consistency (rename-model additive-keep vs replacement asymmetry). A top-level
+	// blueprint variable is scoped to its file AND all subdir bps, so dropping a stock var-DEFINER
+	// while keeping a stock var-REFERENCER child orphans the child ("undefined variable" at bootstrap).
+	// The per-bp additive-keep cannot see this: an all-{{.Camel}} child is KEPT while its mixed parent
+	// — carrying keep-name config/tool/prebuilt modules the rename pass never touches — is DROPPED.
+	// stock_var_definer_bps is the seed-time AST-computed set of stock var-definers; drop the whole
+	// stock subtree under any this pass dropped. Safe: the fork is subtree-complete (carries the parallels).
+	if manifest != nil && len(manifest.StockVarDefinerBps) > 0 {
+		var scopeDirs []string
+		for _, definer := range manifest.StockVarDefinerBps {
+			if !toDrop[definer] {
+				continue
+			}
+			if i := strings.LastIndex(definer, "/"); i >= 0 {
+				scopeDirs = append(scopeDirs, definer[:i+1])
+			}
+		}
+		for _, bp := range androidBps {
+			if toDrop[bp] {
+				continue
+			}
+			for _, dir := range scopeDirs {
+				if strings.HasPrefix(bp, dir) {
+					toDrop[bp] = true
+					break
+				}
+			}
 		}
 	}
 	if len(toDrop) == 0 {
@@ -236,7 +290,9 @@ func deprefix{{.Camel}}IdentitySegment(path string) string {
 // with the CamelCase shared-infra prefix "{{.Camel}}" — in which case its stock parallel is KEPT. A bp
 // with any keep-name (non-"{{.Camel}}") module — including an identity-app {{.DirPrefix}}<App> bp whose
 // internal test/license modules are keep-name — is a REPLACEMENT, so its stock parallel is dropped.
-// Unreadable → replacement (drop).
+// Unreadable → replacement (drop). Additive-keep is load-bearing: UN-FORKED consumers (external/, system/,
+// device/) reference these stock modules (shared _defaults etc.) by stock name, so dropping them breaks
+// the un-forked tree — a whole-root fork does NOT make them redundant.
 func {{.Lane}}ForkKeepsStock(bp string) bool {
 	contents, err := os.ReadFile(bp)
 	if err != nil {

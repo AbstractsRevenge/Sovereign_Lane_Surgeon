@@ -100,11 +100,13 @@ func defaultInfraExcludes(c LaneConfig) []string {
 	//    lane namespace while the consumer still names the stock one. Its siblings (monet,
 	//    iconloaderlib, animationlib, tracinglib) are real UX surface and stay forked — the
 	//    exclude is deliberately ONE directory deep, not the whole libs/systemui tree.
-	// ⛔ proto_logging is deliberately NOT excluded. An earlier revision excluded it because a
-	// forked proto_logging made protoc emit stock-shaped #includes — but runRelocateStockSourcePaths
-	// fixes that properly, so the exclude was a workaround for a solved problem and would have
-	// permanently barred every future lane from forking it. Removed 2026-08-20.
+	//  • proto_logging — telemetry atoms, zero UX relevance, and BOTH frameworks-holo and
+	//    frameworks-holotest leave it stock. Stock Pixel physical device vendor code
+	//    (hardware/google/pixel, device/google/gs201) carries hardcoded includes/imports for
+	//    frameworks/proto_logging. Leaving it stock allows seamless sharing without breaking
+	//    physical device compilation.
 	for _, sub := range []string{
+		"frameworks/proto_logging",
 		"frameworks/libs/systemui/viewcapturelib",
 	} {
 		if forkCovers(c.Forks, sub) {
@@ -695,7 +697,10 @@ func runFixLaneCreatedDefects(c LaneConfig, outRoot string) (applied int) {
 			continue
 		}
 		s := string(b)
-		if strings.Contains(s, "sovereign-lane-surgeon:") || strings.Contains(s, "frameworks-"+c.Name+"/base/core/java/com/android/internal/protolog") {
+		// Already-applied is detected per-entry: the file already carries THIS fix's applied form.
+		// (Generic — covers any entry whether it inserts a marker comment or repoints a bare path —
+		// which the earlier streaming_proto/ProtoLog-specific string checks did not.)
+		if strings.Contains(s, fx.new(c.Name)) {
 			fmt.Printf("  = %-30s already applied\n", fx.name)
 			continue
 		}

@@ -74,7 +74,7 @@ func cmdRequalify(args []string) int {
 			continue
 		}
 		_ = filepath.Walk(rootDir, func(p string, fi os.FileInfo, e error) error {
-			if e != nil || fi.IsDir() || filepath.Base(p) != "Android.bp" {
+			if e != nil || fi.IsDir() || !isBpFile(filepath.Base(p)) {
 				return nil
 			}
 			ch, ferr := requalifyFile(p, *out, laneMap, cache, *force, *prefix, *paths)

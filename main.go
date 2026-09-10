@@ -82,6 +82,24 @@ func main() {
 		os.Exit(cmdReexport(args))
 	case "undefined-deps":
 		os.Exit(cmdUndefinedDeps(args))
+	case "dep-ledger":
+		os.Exit(cmdDepLedger(args))
+	case "refresh-manifest":
+		os.Exit(cmdRefreshManifest(args))
+	case "keepname-offork":
+		os.Exit(cmdKeepNameOffork(args))
+	case "fork-shared-infra":
+		os.Exit(cmdForkSharedInfra(args))
+	case "repoint-lane":
+		os.Exit(cmdRepointLane(args))
+	case "set-prop":
+		os.Exit(cmdSetProp(args))
+	case "fix-lane-defects":
+		os.Exit(cmdFixLaneDefects(args))
+	case "repoint-rust-use":
+		os.Exit(cmdRepointRustUse(args))
+	case "ignore-missing-latest-api":
+		os.Exit(cmdIgnoreMissingLatestApi(args))
 	case "allowed-deps":
 		os.Exit(cmdAllowedDeps(args))
 	case "doctor":
@@ -161,6 +179,15 @@ SUBCOMMANDS:
                                nothing will define once the finder routes the lane (stock parallels of lane
                                bps and manifest-dropped bps excluded). Lists the whole class at once instead of
                                one "depends on undefined module" per Soong run.
+  dep-ledger -name <l> -out <r> [-oracle <l>]  Classify undefined dependencies into actionable dispositions.
+  refresh-manifest -name <l> -out <r>  Refresh route manifest AST-derived fields in place.
+  keepname-offork -name <l> -out <r> [-apply]  Keep off-fork-referenced modules keep-name.
+  fork-shared-infra -name <l> -out <r> [-apply]  Fork and wire shared infrastructure modules.
+  repoint-lane -name <l> -from <src> -out <r> [-apply]  Repoint lane dependencies from source lane.
+  set-prop -name <l> -out <r> -prop <p> -val <v> [-apply]  Set property values in lane Blueprints.
+  fix-lane-defects -name <l> -out <r>  Apply curated defect fixes to forked build tools.
+  repoint-rust-use -name <l> -out <r> -map <map> [-apply]  Repoint Rust crate references in source files.
+  ignore-missing-latest-api -out <r>  Suppress missing latest API checks.
   allowed-deps -out <r> [-name <l>] [-computed <f>] [-apply]  Make the lane SOVEREIGN over its apex
                                allowed-deps. The apex-allowed-deps check reads stock allowed_deps.txt by a
                                RAW SOURCE PATH the finder can't route, so a lane's forked updatable apexes

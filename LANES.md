@@ -496,3 +496,17 @@ are not twins and stay.
 interior segment and creates a phantom `frameworks-holo/base/packages-holo/` tree that defines every
 module a second time. requalify's `requalifyEmbedded` guard exists for this; scripts outside the
 toolkit must use the same root-anchored mapping.
+
+## Additional Lane Commands
+
+The lane toolkit includes specialized subcommands for audit and repair:
+- `dep-ledger`: Classifies undefined dependencies against an oracle lane.
+- `refresh-manifest`: Refreshes route manifest AST-derived fields in place.
+- `keepname-offork`: Keeps off-fork-referenced modules keep-name.
+- `fork-shared-infra`: Forks and wires shared infrastructure modules.
+- `repoint-lane`: Repoints lane dependencies from a source lane.
+- `set-prop`: Sets property values in lane Blueprints.
+- `fix-lane-defects`: Applies curated defect fixes to forked build tools.
+- `repoint-rust-use`: Repoints Rust crate references in source files.
+- `ignore-missing-latest-api`: Suppresses missing latest API checks.
+

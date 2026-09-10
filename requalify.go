@@ -354,7 +354,7 @@ func runRequalify(c LaneConfig, outRoot string) (changed, failed int) {
 			continue
 		}
 		filepath.Walk(rootDir, func(p string, fi os.FileInfo, e error) error {
-			if e != nil || fi.IsDir() || filepath.Base(p) != "Android.bp" {
+			if e != nil || fi.IsDir() || !isBpFile(filepath.Base(p)) {
 				return nil
 			}
 			// barePaths=false here is DELIBERATE and correct for the configuration this pass was
@@ -424,7 +424,7 @@ func runRequalifyFromLane(c LaneConfig, outRoot, srcLane string) (changed, faile
 			continue
 		}
 		filepath.Walk(rootDir, func(p string, fi os.FileInfo, e error) error {
-			if e != nil || fi.IsDir() || filepath.Base(p) != "Android.bp" {
+			if e != nil || fi.IsDir() || !isBpFile(filepath.Base(p)) {
 				return nil
 			}
 			ch, ferr := requalifyFileCfg(p, outRoot, laneMap, cache, false, "", true, soongCfg)

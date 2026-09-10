@@ -247,13 +247,9 @@ func droppedStockSubtrees(c LaneConfig, outRoot string) []string {
 			// p is an identity-app root dir. Only consider the OUTERMOST one (skip nested).
 			rel, _ := filepath.Rel(outRoot, p)
 			rootBp := filepath.Join(p, "Android.bp")
-			// Match the finder's nexusmForkKeepsStock EXACTLY: a MISSING root bp (a container dir like
-			// NexusMCar with no own Android.bp) reads as false → REPLACEMENT (drops the whole stock
-			// subtree). An EXISTING all-"Nexusm"-prefixed root is additive (keep stock) UNLESS it declares
-			// `overrides:` — the install-replacement signal the lane's lowercase-Nexusm identity apps use.
-			if _, err := os.Stat(rootBp); err == nil && bpDeclaresAllPrefixed(rootBp, c.CamelCase) && !bpDeclaresOverrides(rootBp) {
-				return filepath.SkipDir // additive fork -> stock kept
-			}
+			// Clean per-file replacement (the finder no longer additive-keeps): every identity-app fork
+			// drops its stock parallel, so there is no additive fork to skip here — process them all.
+			_ = rootBp
 			// de-prefix the lane identity dir -> stock dir
 			var sdir string
 			if strings.HasPrefix(rel, "frameworks-"+c.Name+"/") {
@@ -303,11 +299,12 @@ func laneBpDeclaresNamespace(path string) bool {
 	return false
 }
 
-// laneForkKeepsStock mirrors the finder's nexusmForkKeepsStock: a lane bp is ADDITIVE (its stock parallel
-// is KEPT) iff every module name is prefixed AND it declares no `overrides:`. Any keep-name (non-prefixed)
-// twin or an `overrides:` makes it a REPLACEMENT whose stock parallel the finder drops.
+// laneForkKeepsStock mirrors the finder's {{.Lane}}ForkKeepsStock, which is now ALWAYS false: the lane
+// moved to clean per-file replacement (additive-keep was the duplicate↔missing-default churn root and was
+// removed). A forked bp always drops its stock parallel, so reexport must always consider re-emitting the
+// keep-name modules a replaced identity app exported.
 func laneForkKeepsStock(path string, c LaneConfig) bool {
-	return bpDeclaresAllPrefixed(path, c.CamelCase) && !bpDeclaresOverrides(path)
+	return false
 }
 
 // stockParallelDropped mirrors the finder's existingStockParallelNexusm PER-FILE decision: given a lane bp
@@ -696,8 +693,8 @@ func runReexport(c LaneConfig, outRoot string, apply bool) {
 		mods, _ := bpModules(p)
 		ma := bpModuleAttrs(p)
 		for n, t := range mods {
-			if !strings.HasPrefix(n, c.CamelCase) && (c.DirPrefix == "" || !strings.HasPrefix(n, c.DirPrefix)) {
-				orphaned[n] = t // keep-name export
+			if !isLaneRenamed(n, c.CamelCase, c.Name) && (c.DirPrefix == "" || !strings.HasPrefix(n, c.DirPrefix)) {
+				orphaned[n] = t // keep-name export (not lane-renamed under suffix OR legacy prefix)
 				attrs[n] = ma[n]
 			}
 		}

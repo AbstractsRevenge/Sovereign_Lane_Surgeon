@@ -56,32 +56,34 @@ func cmdKeepNameOffork(args []string) int {
 	if *name != "" {
 		camel = strings.ToUpper((*name)[:1]) + (*name)[1:]
 	}
+	lower := *name
 
 	laneModules := laneModuleSet(*out, *name)
 
 	rename := map[string]string{}
 	if *only != "" {
-		// Targeted un-rename: exactly the named bases, if the lane defines Camel<base>. Used for a base
+		// Targeted un-rename: exactly the named bases, if the lane defines a renamed form. Used for a base
 		// known to be genuinely off-fork-referenced (e.g. android.frameworks.stats, imported by system/*,
-		// external/*, hardware/*) where the broad detector over- or under-flags.
+		// external/*, hardware/*) where the broad detector over- or under-flags. Checks every renamed form
+		// (suffix apps/libs + legacy prefix) so it works whichever model the lane is in.
 		for _, b := range strings.Split(*only, ",") {
 			b = strings.TrimSpace(b)
 			if b == "" {
 				continue
 			}
-			if laneModules[camel+b] {
-				rename[camel+b] = b
+			for _, form := range laneRenamedForms(b, camel, lower) {
+				if laneModules[form] {
+					rename[form] = b
+					break
+				}
 			}
 		}
 	} else {
 		offFork := unforkedRefIndex(*out)
 		for r := range laneModules {
-			if !strings.HasPrefix(r, camel) {
-				continue
-			}
-			base := r[len(camel):]
-			if base == "" || laneModules[base] {
-				continue // empty, or the lane already declares the keep-name base (genuinely additive)
+			base, ok := laneRenamedBase(r, camel, lower)
+			if !ok || base == "" || laneModules[base] {
+				continue // not renamed, empty, or the lane already declares the keep-name base (additive)
 			}
 			if offForkReferenced(base, offFork) {
 				rename[r] = base

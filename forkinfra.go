@@ -355,7 +355,7 @@ func cmdIgnoreMissingLatestApi(args []string) int {
 						}
 					}
 				}
-				if !strings.HasPrefix(nm, camel) {
+				if !isLaneRenamed(nm, camel, *name) {
 					continue
 				}
 				if setOrAddBool(mod, prop, true) {
@@ -437,11 +437,8 @@ func laneRenameReverseMap(outRoot, lane, camel string, protect map[string]bool) 
 	laneMods := laneModuleSet(outRoot, lane)
 	m := map[string]string{}
 	for mod := range laneMods {
-		if !strings.HasPrefix(mod, camel) {
-			continue
-		}
-		base := mod[len(camel):]
-		if base == "" || protect[base] || laneMods[base] {
+		base, ok := laneRenamedBase(mod, camel, lane)
+		if !ok || base == "" || protect[base] || laneMods[base] {
 			continue
 		}
 		m[base] = mod

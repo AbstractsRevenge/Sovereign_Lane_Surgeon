@@ -279,7 +279,7 @@ func cmdCreate(args []string) int {
 	kernelVersion := fs.String("kernel-version", "", "stock mode: set TARGET_LINUX_KERNEL_VERSION to this value in every mirrored device's product mk(s)")
 	hwSubtrees := fs.String("hw-subtrees", "", "stock mode: comma-separated non-device subtrees to mirror verbatim from -source-root (e.g. hardware/google/gchips,hardware/google/graphics)")
 	factoryImagesRoot := fs.String("factory-images-root", "", "stock mode: parent dir of per-device factory-image extraction dirs (<root>/<device>/...) to wire as vendor/google_devices/<device>/ blobs")
-	release := fs.String("release", "", "stock mode: target release config (the lunch's middle token, e.g. cp2a); with -factory-images-root, assembles the kernel prebuilt dir RELEASE_KERNEL_<DEVICE>_DIR names")
+	release := fs.String("release", "", "target release config used in generated lane lunches (default bp1a); in stock mode, also selects the RELEASE_KERNEL_<DEVICE>_DIR kernel prebuilt")
 	noVerify := fs.Bool("no-verify", false, "stock mode: skip the structural verification create -stock runs on the tree it produced (verify-seed does the same)")
 	bundleDir := fs.String("bundle-dir", "", "bundle content from this directory (verified against the embedded manifest) instead of the binary/cache; also $SLS_BUNDLE_DIR")
 	bundleURL := fs.String("bundle-url", "", "fetch the bundle archive (.tar.gz from `bundle export`) into the cache when the binary carries none (-tags nobundle); also $SLS_BUNDLE_URL")
@@ -352,6 +352,7 @@ func cmdCreate(args []string) int {
 		}
 		for _, nm := range names {
 			c := deriveLane(nm, !*rename, devs, *goldfish, *cuttlefish, *prefixDirs)
+			c.Release = strings.ToLower(strings.TrimSpace(*release))
 			c.Forks = forks
 			c.ForkExclude = forkExcludes
 			c.NoCompose = *noCompose
@@ -373,6 +374,7 @@ func cmdCreate(args []string) int {
 		}
 		c.Forks = forks
 		c.ForkExclude = forkExcludes
+		c.Release = strings.ToLower(strings.TrimSpace(*release))
 		cfgs = append(cfgs, c)
 		fmt.Println()
 	}

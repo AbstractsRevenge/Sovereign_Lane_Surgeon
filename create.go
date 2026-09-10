@@ -50,7 +50,7 @@ type LaneConfig struct {
 	KernelVersion     string   // set TARGET_LINUX_KERNEL_VERSION to this in every mirrored device's product mk(s)
 	HWSubtrees        []string // non-device subtrees to mirror verbatim (e.g. hardware/google/gchips)
 	FactoryImagesRoot string   // parent dir of per-device factory-image extraction dirs (<root>/<device>/...), for vendor blob wiring
-	Release           string   // target release config (e.g. cp2a) — selects RELEASE_KERNEL_<DEVICE>_DIR for kernel prebuilt assembly
+	Release           string   // target release config (e.g. bp4a/cp2a) — used by lane lunches and stock kernel assembly
 }
 
 func deriveLane(name string, keepName bool, devices []string, goldfish, cuttlefish bool, dirPrefix string) LaneConfig {
@@ -151,7 +151,7 @@ func printScaffoldPlan(c LaneConfig) {
 	}
 	for _, d := range c.Devices {
 		fmt.Printf("   3. device/google/%s%s/ : aosp_%s_%s.mk (PRODUCT_NAME suffix → is<Lane>Product; SOONG_CONFIG opt-in;\n", d, c.DirSuffix, d, c.Name)
-		fmt.Printf("      PRODUCT_PACKAGES→lane installables) + AndroidProducts.mk (register + COMMON_LUNCH_CHOICES)\n")
+		fmt.Printf("      PRODUCT_PACKAGES→lane installables) + AndroidProducts.mk (register + %s COMMON_LUNCH_CHOICES)\n", laneRelease(c))
 	}
 	if c.Goldfish {
 		fmt.Printf("   4. goldfish emu: sdk_phone64_%s.mk + sdk_tablet_%s.mk (+ register in goldfish AndroidProducts.mk)\n", c.Name, c.Name)

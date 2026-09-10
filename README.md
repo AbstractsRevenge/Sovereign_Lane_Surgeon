@@ -70,6 +70,15 @@ working lane exists before you have edited a file.
 ./sovereign-lane-surgeon create -name myui -devices lynx -out /path/to/aosp
 ```
 
+Lane device lunches default to Android 15's `bp1a`. For another platform release,
+select it explicitly; for Android 16 r4, use `-release bp4a` and the generated device
+products will register `aosp_<device>_<lane>-bp4a-{eng,userdebug,user}`.
+
+```bash
+./sovereign-lane-surgeon create -name holo -devices cheetah -release bp4a \
+    -out /home/abstractsrevenge/AOSP_Workspace/android-16.0.0_r4
+```
+
 Device revival grew out of that: a revived Pixel is a lane's stock foundation, seeded from the
 same `create` command with `-stock`. The lane toolkit is documented in full in
 [LANES.md](LANES.md), including the sixteen blocker classes a whole-root fork of `frameworks/` and

@@ -70,6 +70,60 @@ func TestGenDeviceProduct(t *testing.T) {
 	}
 }
 
+func TestGenDeviceProductUsesTargetRelease(t *testing.T) {
+	cfg := deriveLane("holo", true, []string{"cheetah"}, false, false, "")
+	cfg.Release = "bp4a"
+	_, content, err := genDeviceProduct(cfg, deviceResolution{
+		Product: "cheetah", ProductTitle: "Cheetah", Family: "pantah", SoC: "gs201", Resolved: true,
+	}, androidProductsMkTmpl, "AndroidProducts.mk")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{
+		"aosp_cheetah_holo-bp4a-userdebug",
+		"aosp_cheetah_holo-bp4a-user",
+		"aosp_cheetah_holo-bp4a-eng",
+	} {
+		if !strings.Contains(content, want) {
+			t.Errorf("generated AndroidProducts.mk missing %q", want)
+		}
+	}
+	if strings.Contains(content, "-bp1a-") {
+		t.Error("BP4A generation leaked the Android 15 BP1A release config")
+	}
+}
+
+func TestRegisterDeviceProductAddsNewReleaseToExistingProduct(t *testing.T) {
+	root := t.TempDir()
+	cfg := deriveLane("holo", true, []string{"cheetah"}, false, false, "")
+	cfg.Release = "bp4a"
+	res := deviceResolution{Product: "cheetah", ProductTitle: "Cheetah", Family: "pantah", SoC: "gs201", Resolved: true}
+	dir := filepath.Join(root, "device", "google", "pantah-holo")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	existing := "PRODUCT_MAKEFILES := \\\n    $(LOCAL_DIR)/aosp_cheetah_holo.mk\n\nCOMMON_LUNCH_CHOICES := \\\n    aosp_cheetah_holo-bp1a-eng\n"
+	path := filepath.Join(dir, "AndroidProducts.mk")
+	if err := os.WriteFile(path, []byte(existing), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if got := registerDeviceProduct(cfg, root, res); got != patchApplied {
+		t.Fatalf("registerDeviceProduct = %v, want patchApplied", got)
+	}
+	content, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{"-bp4a-userdebug", "-bp4a-user", "-bp4a-eng"} {
+		if !strings.Contains(string(content), want) {
+			t.Errorf("updated AndroidProducts.mk missing %q", want)
+		}
+	}
+	if strings.Count(string(content), "aosp_cheetah_holo.mk") != 1 {
+		t.Error("existing product registration was duplicated")
+	}
+}
+
 // TestGenDeviceProductFamily is the key case T flagged: cheetah is a PRODUCT in the pantah FAMILY.
 // The device dir must be pantah-<lane>, the product aosp_cheetah_<lane>, SoC gs201.
 func TestGenDeviceProductFamily(t *testing.T) {

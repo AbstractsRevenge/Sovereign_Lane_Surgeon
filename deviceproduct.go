@@ -44,6 +44,16 @@ type devTmplData struct {
 	Family       string // "pantah" (device/google/ folder; == Product for lynx/tangorpro)
 	SoC          string // "gs201" — auto-derived; "" ⇒ emits a TODO
 	Rename       bool   // rename/app-naming model (DirPrefix set) — emits the keep-name-stub app allowlist
+	Release      string // AOSP release config used in lunch choices ("bp1a", "bp4a", ...)
+}
+
+// laneRelease preserves the Android 15 behavior for existing callers while allowing
+// newer target trees to select their own release config with create -release.
+func laneRelease(c LaneConfig) string {
+	if release := strings.ToLower(strings.TrimSpace(c.Release)); release != "" {
+		return release
+	}
+	return "bp1a"
 }
 
 // deviceResolution is the tree-derived identity of a target device.
@@ -317,9 +327,9 @@ PRODUCT_MAKEFILES := \
     $(LOCAL_DIR)/aosp_{{.Product}}_{{.Lane}}.mk
 
 COMMON_LUNCH_CHOICES := \
-    aosp_{{.Product}}_{{.Lane}}-bp1a-userdebug \
-    aosp_{{.Product}}_{{.Lane}}-bp1a-user \
-    aosp_{{.Product}}_{{.Lane}}-bp1a-eng
+    aosp_{{.Product}}_{{.Lane}}-{{.Release}}-userdebug \
+    aosp_{{.Product}}_{{.Lane}}-{{.Release}}-user \
+    aosp_{{.Product}}_{{.Lane}}-{{.Release}}-eng
 `))
 
 // deviceAndroidBpTmpl — the device dir's Android.bp (package + license boilerplate). The license
@@ -360,7 +370,7 @@ func genDeviceProduct(c LaneConfig, res deviceResolution, tmpl *template.Templat
 		Lane: c.Name, CamelCase: c.CamelCase,
 		Product: res.Product, ProductTitle: res.ProductTitle,
 		Family: res.Family, SoC: res.SoC,
-		Rename: c.DirPrefix != "",
+		Rename: c.DirPrefix != "", Release: laneRelease(c),
 	}
 	var sb strings.Builder
 	if err := tmpl.Execute(&sb, data); err != nil {
@@ -447,7 +457,7 @@ func writeDeviceProducts(c LaneConfig, outRoot string) (wrote, skipped int, fata
 
 // registerDeviceProduct merges a product into an EXISTING device-family AndroidProducts.mk (the
 // multi-product case: pantah-<lane> already carries panther, now add cheetah). Inserts the product
-// mk line into PRODUCT_MAKEFILES + the three bp1a lunch choices into COMMON_LUNCH_CHOICES via
+// mk line into PRODUCT_MAKEFILES + the three release-specific lunch choices into COMMON_LUNCH_CHOICES via
 // insertAfterListHead. Idempotent (patchAlreadyDone if the product mk is already listed — including
 // the freshly-templated single-product file, where it's a no-op), snapshotted (.sld-bak).
 func registerDeviceProduct(c LaneConfig, outRoot string, res deviceResolution) patchStatus {
@@ -457,20 +467,36 @@ func registerDeviceProduct(c LaneConfig, outRoot string, res deviceResolution) p
 		return patchFileMissing
 	}
 	prodMk := fmt.Sprintf("aosp_%s_%s.mk", res.Product, c.Name)
-	if strings.Contains(string(raw), prodMk) {
+	prod := fmt.Sprintf("aosp_%s_%s", res.Product, c.Name)
+	release := laneRelease(c)
+	wantedLunch := []string{
+		fmt.Sprintf("    %s-%s-userdebug \\", prod, release),
+		fmt.Sprintf("    %s-%s-user \\", prod, release),
+		fmt.Sprintf("    %s-%s-eng \\", prod, release),
+	}
+	rawText := string(raw)
+	hasProduct := strings.Contains(rawText, prodMk)
+	var lunchEntries []string
+	for _, entry := range wantedLunch {
+		if !strings.Contains(rawText, strings.TrimSpace(strings.TrimSuffix(entry, "\\"))) {
+			lunchEntries = append(lunchEntries, entry)
+		}
+	}
+	if hasProduct && len(lunchEntries) == 0 {
 		return patchAlreadyDone
 	}
-	prod := fmt.Sprintf("aosp_%s_%s", res.Product, c.Name)
-	mkEntries := []string{fmt.Sprintf("    $(LOCAL_DIR)/%s \\", prodMk)}
-	lunchEntries := []string{
-		fmt.Sprintf("    %s-bp1a-userdebug \\", prod),
-		fmt.Sprintf("    %s-bp1a-user \\", prod),
-		fmt.Sprintf("    %s-bp1a-eng \\", prod),
+	out := strings.Split(rawText, "\n")
+	if !hasProduct {
+		out = insertAfterListHead(out, "PRODUCT_MAKEFILES", []string{fmt.Sprintf("    $(LOCAL_DIR)/%s \\", prodMk)})
+		if out == nil {
+			return patchUnrecognized
+		}
 	}
-	out := insertAfterListHead(strings.Split(string(raw), "\n"), "PRODUCT_MAKEFILES", mkEntries)
-	out = insertAfterListHead(out, "COMMON_LUNCH_CHOICES", lunchEntries)
-	if out == nil {
-		return patchUnrecognized
+	if len(lunchEntries) > 0 {
+		out = insertAfterListHead(out, "COMMON_LUNCH_CHOICES", lunchEntries)
+		if out == nil {
+			return patchUnrecognized
+		}
 	}
 	if bak := abs + ".sld-bak"; func() bool { _, e := os.Stat(bak); return os.IsNotExist(e) }() {
 		_ = os.WriteFile(abs+".sld-bak", raw, 0o644)

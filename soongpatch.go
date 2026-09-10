@@ -37,10 +37,11 @@ import (
 //	                                                    shouldSuppressStock* framework suppressors
 //	build/soong/android/visibility.go laneCanonicalPkgs() — append "-<lane>"; lane→stock pkg mapping
 //
-// Both are patched by locating the []string composite literal via go/ast (HARD RULE 3 — never a
-// regex on Go source) and splicing one element after the last, re-parsing to prove the result
-// still compiles. The finder.go additive per-lane funcs + pipeline call + cross-cutting other-lane
-// suffix edits are a separate part (finderpatch.go). The route manifest is emitted here (part B).
+// Both are patched by locating the intended []string composite literal via go/ast (HARD RULE 3 —
+// never a regex on Go source) and splicing one element after the last, re-parsing to prove the
+// result still compiles. The finder.go additive per-lane funcs + pipeline call + cross-cutting
+// other-lane suffix edits are a separate part (finderpatch.go). The route manifest is emitted
+// here (part B).
 
 // appendStringElem splices newElem (raw; this func quotes it) into the first []string{...}
 // composite literal inside the top-level function funcName of src. AST-located, byte-spliced
@@ -108,6 +109,75 @@ func appendStringElem(src []byte, funcName, newElem string) (out []byte, changed
 	return out, true, nil
 }
 
+// appendStringElemToRangeSlice splices newElem into the inline []string literal used as the
+// expression of a range loop inside funcName. Unlike appendStringElem, this deliberately ignores
+// other string slices in the function. laneCanonicalPkgs starts with []string{pkg} for its result
+// and later ranges over the lane suffix registry; appending a bare suffix to the result would make
+// unrelated packages compare equal and effectively disable package visibility.
+func appendStringElemToRangeSlice(src []byte, funcName, newElem string) (out []byte, changed bool, err error) {
+	fset := token.NewFileSet()
+	f, err := parser.ParseFile(fset, "", src, parser.ParseComments)
+	if err != nil {
+		return nil, false, fmt.Errorf("parse: %w", err)
+	}
+	var lit *ast.CompositeLit
+	for _, decl := range f.Decls {
+		fd, ok := decl.(*ast.FuncDecl)
+		if !ok || fd.Name.Name != funcName || fd.Body == nil {
+			continue
+		}
+		ast.Inspect(fd.Body, func(n ast.Node) bool {
+			if lit != nil {
+				return false
+			}
+			rs, ok := n.(*ast.RangeStmt)
+			if !ok {
+				return true
+			}
+			cl, ok := rs.X.(*ast.CompositeLit)
+			if !ok {
+				return true
+			}
+			at, ok := cl.Type.(*ast.ArrayType)
+			if !ok {
+				return true
+			}
+			if id, ok := at.Elt.(*ast.Ident); ok && id.Name == "string" {
+				lit = cl
+				return false
+			}
+			return true
+		})
+		break
+	}
+	if lit == nil {
+		return nil, false, fmt.Errorf("no ranged []string{...} literal found in func %q", funcName)
+	}
+	if len(lit.Elts) == 0 {
+		return nil, false, fmt.Errorf("func %q has an empty ranged []string literal", funcName)
+	}
+	for _, e := range lit.Elts {
+		bl, ok := e.(*ast.BasicLit)
+		if !ok || bl.Kind != token.STRING {
+			continue
+		}
+		if v, uerr := strconv.Unquote(bl.Value); uerr == nil && v == newElem {
+			return src, false, nil
+		}
+	}
+	last := lit.Elts[len(lit.Elts)-1]
+	if fset.Position(lit.Rbrace).Line != fset.Position(last.Pos()).Line {
+		return nil, false, fmt.Errorf("func %q ranged slice is multi-line; inline-only appender", funcName)
+	}
+	off := fset.Position(last.End()).Offset
+	ins := []byte(fmt.Sprintf(", %q", newElem))
+	out = append(append(append([]byte{}, src[:off]...), ins...), src[off:]...)
+	if _, perr := parser.ParseFile(token.NewFileSet(), "", out, 0); perr != nil {
+		return nil, false, fmt.Errorf("post-splice reparse failed (would corrupt source): %w", perr)
+	}
+	return out, true, nil
+}
+
 // PatchIsLaneLunch registers the lane in aar.go's isLaneLunch suffix set (auto-enrolls the 5
 // shouldSuppressStock* framework suppressors — a single-slot enrollment, by design).
 func PatchIsLaneLunch(src []byte, lane string) ([]byte, bool, error) {
@@ -117,7 +187,7 @@ func PatchIsLaneLunch(src []byte, lane string) ([]byte, bool, error) {
 // PatchLaneCanonicalPkgs registers the lane's dir suffix in visibility.go's laneCanonicalPkgs
 // (the lane→stock package-dir mapping used for visibility resolution).
 func PatchLaneCanonicalPkgs(src []byte, lane string) ([]byte, bool, error) {
-	return appendStringElem(src, "laneCanonicalPkgs", "-"+lane)
+	return appendStringElemToRangeSlice(src, "laneCanonicalPkgs", "-"+lane)
 }
 
 // appendFrameworkResCase adds "framework-res-<lane>" to the case list of aar.go's

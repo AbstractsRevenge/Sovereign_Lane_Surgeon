@@ -46,8 +46,8 @@ func mustParse(t *testing.T, src []byte) {
 	}
 }
 
-// TestGenFinderLaneFuncs: the 5 additive funcs render gofmt-clean with the nexusm self-contained
-// shape (detection, manifest struct, loader, apply, isOtherLaneBpFor) + correct suffix chain.
+// TestGenFinderLaneFuncs: the additive funcs render gofmt-clean with lane detection, stock
+// isolation, manifest loading, lane routing, and the correct sibling suffix chain.
 func TestGenFinderLaneFuncs(t *testing.T) {
 	cfg := deriveLane("aurora", true, nil, true, true, "")
 	block, err := genFinderLaneFuncs(cfg, []string{"-holo", "-nexus"})
@@ -57,6 +57,8 @@ func TestGenFinderLaneFuncs(t *testing.T) {
 	for _, want := range []string{
 		"func isAuroraLane(config Config) bool",
 		`strings.HasSuffix(targetProduct, "_aurora")`,
+		"func isAuroraLaneBp(bp string) bool",
+		"func dropAuroraLaneBps(androidBps []string) []string",
 		"type auroraBpRouteManifest struct",
 		"func loadAuroraBpRouteManifest(ctx Context, config Config) *auroraBpRouteManifest",
 		`filepath.Join(".aurora", "aurora_bp_route_manifest.json")`,
@@ -85,6 +87,9 @@ func TestGenFinderModelAware(t *testing.T) {
 	}
 	for _, want := range []string{
 		"func auroraStockParallel(bp string) string",
+		`candidates = append(candidates, uniform, rel)`,
+		`strings.ReplaceAll(candidate, "/kotlin/", "/java/")`,
+		`os.Stat(candidate)`,
 		`toDrop["frameworks-aurora/Android.bp"] = true`,
 		"toDrop[stock] = true", // per-file replacement
 		"KEEP-NAME model",
@@ -157,7 +162,8 @@ func TestInsertPipelineCall(t *testing.T) {
 	}
 	mustParse(t, out)
 	if !strings.Contains(string(out), "if isAuroraLane(config) {") ||
-		!strings.Contains(string(out), "androidBps = applyAuroraBpRoutes(ctx, config, androidBps)") {
+		!strings.Contains(string(out), "androidBps = applyAuroraBpRoutes(ctx, config, androidBps)") ||
+		!strings.Contains(string(out), "androidBps = dropAuroraLaneBps(androidBps)") {
 		t.Errorf("pipeline call not inserted correctly:\n%s", out)
 	}
 	// The new block must precede the guard.
@@ -212,18 +218,17 @@ func TestKeepNameApplyEmitsNamespaceCollapse(t *testing.T) {
 	}
 }
 
-// TestGenFinderLaneFuncs_SoleLaneAndKeptStock pins two template properties: with no sibling lanes the
-// other-lane rule emits no component loop (a loop over an unused `comp` is a Go compile error — the
-// first-lane case holo-adopt hit), and the keep-name apply honors the manifest's kept_stock_bp_paths so
-// an additive lane dir (monet-holo beside stock monet) keeps its stock parallel.
+// TestGenFinderLaneFuncs_SoleLaneAndKeptStock pins two template properties: with no sibling lanes
+// only the stock-isolation loop is emitted, while the other-lane rule has no component loop; and
+// the keep-name apply honors kept_stock_bp_paths so an additive lane dir keeps its stock parallel.
 func TestGenFinderLaneFuncs_SoleLaneAndKeptStock(t *testing.T) {
 	c := deriveLane("holo", true, nil, false, false, "")
 	sole, err := genFinderLaneFuncs(c, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if strings.Contains(sole, "for _, comp := range") {
-		t.Errorf("sole-lane finder block must not emit the component loop:\n%s", sole)
+	if got := strings.Count(sole, "for _, comp := range"); got != 1 {
+		t.Errorf("sole-lane finder block should contain only its stock-isolation loop, got %d:\n%s", got, sole)
 	}
 	for _, want := range []string{"KeptStockBpPaths", "keptStock[kept] = true", `&& !keptStock[stock]`} {
 		if !strings.Contains(sole, want) {
@@ -234,7 +239,7 @@ func TestGenFinderLaneFuncs_SoleLaneAndKeptStock(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(multi, "for _, comp := range") || !strings.Contains(multi, `"-nexusm"`) {
+	if strings.Count(multi, "for _, comp := range") != 2 || !strings.Contains(multi, `"-nexusm"`) {
 		t.Errorf("multi-lane finder block must loop over components with the sibling suffix")
 	}
 }

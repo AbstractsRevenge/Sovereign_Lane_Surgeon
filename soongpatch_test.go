@@ -40,10 +40,11 @@ func isLaneLunch(productName string) bool {
 const laneCanonicalPkgsSample = `package android
 
 func laneCanonicalPkgs(pkg string) []string {
+	out := []string{pkg}
 	for _, suf := range []string{"-holo", "-nexusm", "-nexus"} {
 		_ = suf
 	}
-	return nil
+	return out
 }
 `
 
@@ -82,6 +83,9 @@ func TestAppendStringElemSetEqual(t *testing.T) {
 		if !strings.Contains(string(out), want) {
 			t.Errorf("missing suffix %s in patched output", want)
 		}
+	}
+	if strings.Contains(string(out), `out := []string{pkg, "-nexusm"}`) {
+		t.Fatalf("suffix was incorrectly added to canonical package results:\n%s", out)
 	}
 }
 

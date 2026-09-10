@@ -63,6 +63,29 @@ var finderSharedTmpl = template.Must(template.New("findershared").Parse(
 		"\t}\n" +
 		"\treturn strings.HasSuffix(targetProduct, \"_{{.Lane}}\")\n" +
 		"}\n\n" +
+		"// is{{.Camel}}LaneBp reports whether bp belongs to this lane's suffixed source trees.\n" +
+		"// The universal compiler toolchain is shared infrastructure and remains visible to stock.\n" +
+		"func is{{.Camel}}LaneBp(bp string) bool {\n" +
+		"\tif strings.HasPrefix(bp, \"external/kotlinc-holo/\") {\n" +
+		"\t\treturn false\n" +
+		"\t}\n" +
+		"\tfor _, comp := range strings.Split(bp, \"/\") {\n" +
+		"\t\tif strings.HasSuffix(comp, \"{{.DirSuffix}}\") {\n" +
+		"\t\t\treturn true\n" +
+		"\t\t}\n" +
+		"\t}\n" +
+		"\treturn false\n" +
+		"}\n\n" +
+		"// drop{{.Camel}}LaneBps keeps this lane invisible to stock and sibling products.\n" +
+		"func drop{{.Camel}}LaneBps(androidBps []string) []string {\n" +
+		"\tfiltered := make([]string, 0, len(androidBps))\n" +
+		"\tfor _, bp := range androidBps {\n" +
+		"\t\tif !is{{.Camel}}LaneBp(bp) {\n" +
+		"\t\t\tfiltered = append(filtered, bp)\n" +
+		"\t\t}\n" +
+		"\t}\n" +
+		"\treturn filtered\n" +
+		"}\n\n" +
 		"// {{.Lane}}BpRouteManifest is the {{.Lane}}-lane BP route curation manifest (lean shape: the\n" +
 		"// suffix rule isOtherLaneBpFor{{.Camel}} does the bulk cross-lane drop; this carries only the\n" +
 		"// specific soong_namespace bps the suffix rule misses).\n" +
@@ -359,16 +382,35 @@ var finderKeepNameApplyTmpl = template.Must(template.New("keepnameapply").Parse(
 		"\t}\n" +
 		"\treturn filtered\n" +
 		"}\n\n" +
-		"// {{.Lane}}StockParallel maps a lane bp to its stock-parallel path (frameworks{{.DirSuffix}}/X →\n" +
-		"// frameworks/X, packages{{.DirSuffix}}/X → packages/X), or \"\" when bp is not a lane bp.\n" +
+		"// {{.Lane}}StockParallel maps a lane bp to its stock-parallel path. It handles the uniform\n" +
+		"// frameworks/packages fork, packages nested-root forks, and kotlin-to-java relocations.\n" +
+		"// The first existing candidate wins; a non-existing uniform candidate is returned as a\n" +
+		"// harmless drop key for additive lane files.\n" +
 		"func {{.Lane}}StockParallel(bp string) string {\n" +
+		"\tvar uniform string\n" +
+		"\tcandidates := []string{}\n" +
 		"\tif strings.HasPrefix(bp, \"frameworks{{.DirSuffix}}/\") {\n" +
-		"\t\treturn \"frameworks/\" + strings.TrimPrefix(bp, \"frameworks{{.DirSuffix}}/\")\n" +
+		"\t\tuniform = \"frameworks/\" + strings.TrimPrefix(bp, \"frameworks{{.DirSuffix}}/\")\n" +
+		"\t\tcandidates = append(candidates, uniform)\n" +
+		"\t} else if strings.HasPrefix(bp, \"packages{{.DirSuffix}}/\") {\n" +
+		"\t\trel := strings.TrimPrefix(bp, \"packages{{.DirSuffix}}/\")\n" +
+		"\t\tuniform = \"packages/\" + rel\n" +
+		"\t\tcandidates = append(candidates, uniform, rel)\n" +
+		"\t} else {\n" +
+		"\t\treturn \"\"\n" +
 		"\t}\n" +
-		"\tif strings.HasPrefix(bp, \"packages{{.DirSuffix}}/\") {\n" +
-		"\t\treturn \"packages/\" + strings.TrimPrefix(bp, \"packages{{.DirSuffix}}/\")\n" +
+		"\tbaseCandidates := append([]string(nil), candidates...)\n" +
+		"\tfor _, candidate := range baseCandidates {\n" +
+		"\t\tif strings.Contains(candidate, \"/kotlin/\") {\n" +
+		"\t\t\tcandidates = append(candidates, strings.ReplaceAll(candidate, \"/kotlin/\", \"/java/\"))\n" +
+		"\t\t}\n" +
 		"\t}\n" +
-		"\treturn \"\"\n" +
+		"\tfor _, candidate := range candidates {\n" +
+		"\t\tif _, err := os.Stat(candidate); err == nil {\n" +
+		"\t\t\treturn candidate\n" +
+		"\t\t}\n" +
+		"\t}\n" +
+		"\treturn uniform\n" +
 		"}\n\n" +
 		"// is{{.Camel}}OwnedNamespaceBp reports whether a lane namespace-decl bp must stay NAMESPACED\n" +
 		"// rather than collapse to the global namespace. Only decomposition pods qualify: their\n" +
@@ -773,7 +815,7 @@ func insertPipelineCall(src []byte, camel string) (out []byte, changed bool, err
 		return nil, false, fmt.Errorf("pipeline guard `if len(androidBps) == 0` not found")
 	}
 	off := lineStartOffset(fset, target.Pos())
-	block := fmt.Sprintf("\tif is%sLane(config) {\n\t\tandroidBps = apply%sBpRoutes(ctx, config, androidBps)\n\t}\n", camel, camel)
+	block := fmt.Sprintf("\tif is%sLane(config) {\n\t\tandroidBps = apply%sBpRoutes(ctx, config, androidBps)\n\t} else {\n\t\tandroidBps = drop%sLaneBps(androidBps)\n\t}\n", camel, camel, camel)
 	ins := []byte(block)
 	out = append(append(append([]byte{}, src[:off]...), ins...), src[off:]...)
 	if _, perr := parser.ParseFile(token.NewFileSet(), "", out, 0); perr != nil {

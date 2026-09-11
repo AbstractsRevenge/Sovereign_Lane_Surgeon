@@ -94,6 +94,8 @@ entries before glob expansion, so the empty paths still attached Kotlin runtime 
 before module renaming: it drops only lane-added empty `.kt` paths, retains real or target-owned
 Kotlin, and restores an exact stock `java/` exclusion. Regression coverage includes Blueprint
 `**` matching, exclusion-aware source checks, AdServices repair, and `_holo2` parent mapping.
+The same parity pass also removes empty Kotlin globs from Permission's Java-only helper libraries;
+scoped `repair-lane` now makes that pass available to lanes created before the repair was added.
 
 ---
 

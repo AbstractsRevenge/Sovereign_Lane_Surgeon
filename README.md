@@ -255,8 +255,9 @@ The full sequence, with what each step measured on cheetah, is on the wiki's
 | `assemble-super` | write the flash script; also packs the prebuilt partitions for a tree seeded before the vendor-glue fix of 2026-09-03, a fallback that is slated for removal once no such tree remains |
 | `extract-vendor`, `assemble-kernel` | the vendor and kernel halves of `create -stock`, standalone |
 | `audit`, `verify`, `doctor` | classify a failed build against the blocker taxonomy |
+| `repair-lane` | re-run target-stock Kotlin source parity in selected existing-lane subtrees without reprinting unrelated Blueprints |
 
-The lane commands (`create` without `-stock`, plus `apply`, `uninstall`, `requalify`,
+The lane commands (`create` without `-stock`, plus `repair-lane`, `apply`, `uninstall`, `requalify`,
 `rename-module`, `drop-dep`, `reexport`, `undefined-deps`, `dep-ledger` and `allowed-deps`) are documented in
 [LANES.md](LANES.md). `sovereign-lane-surgeon help` prints the full usage.
 

@@ -24,6 +24,8 @@ active limitations remain in [CURRENT_STATE.md](CURRENT_STATE.md).
 
 ### Added
 
+- Added scoped `repair-lane` so existing lanes can receive the same target-stock Kotlin source
+  parity that `create` applies to new lanes without reprinting unrelated Blueprints.
 - Added release-specific lane lunches through `-release`, including Android 16 r4 BP4A products.
 - Added path-only immediate-parent suffixing through
   `-rename -suffix-parent-dirs <suffix>`. Descendant paths and module names remain unchanged.
@@ -43,6 +45,9 @@ active limitations remain in [CURRENT_STATE.md](CURRENT_STATE.md).
 
 ### Fixed
 
+- Fixed Android 15 Permission system-server libraries retaining empty `java/**/*.kt` globs from a
+  newer source lane. Their automatic Kotlin dependencies were merged through `service-permission`
+  and failed its `permitted_packages` check on JetBrains and IntelliJ annotation classes.
 - Fixed first-lane finder generation when no sibling suffix exists.
 - Fixed adding a second lane to a first lane whose cross-lane rule contains only `return false`.
 - Fixed stock isolation after Holo routing and derived-lane routing are both installed.

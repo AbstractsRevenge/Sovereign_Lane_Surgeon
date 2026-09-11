@@ -294,9 +294,15 @@ func stockParallelBP(c LaneConfig, outRoot, lanePath string) string {
 // java/ exclusion when an inherited transformation changed that exact stock entry to kotlin/.
 // Valid lane-authored Kotlin and source patterns owned by the target release are retained.
 func runRepairInheritedKotlinSourceDrift(c LaneConfig, outRoot string) kotlinSourceParityResult {
+	return runRepairInheritedKotlinSourceDriftIn(c, outRoot, []string{
+		filepath.Join(outRoot, "frameworks-"+c.Name),
+		filepath.Join(outRoot, "packages-"+c.Name),
+	})
+}
+
+func runRepairInheritedKotlinSourceDriftIn(c LaneConfig, outRoot string, laneRoots []string) kotlinSourceParityResult {
 	result := kotlinSourceParityResult{}
-	for _, root := range []string{"frameworks-" + c.Name, "packages-" + c.Name} {
-		laneRoot := filepath.Join(outRoot, root)
+	for _, laneRoot := range laneRoots {
 		_ = filepath.Walk(laneRoot, func(p string, info os.FileInfo, err error) error {
 			if err != nil || info.IsDir() || filepath.Base(p) != "Android.bp" {
 				return nil

@@ -49,6 +49,7 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 )
 
@@ -68,6 +69,8 @@ func main() {
 		os.Exit(cmdVerify(args))
 	case "create":
 		os.Exit(cmdCreate(args))
+	case "repair-lane":
+		os.Exit(cmdRepairLane(args))
 	case "apply":
 		os.Exit(cmdApply(args))
 	case "uninstall":
@@ -129,6 +132,9 @@ SUBCOMMANDS:
   create                       Interactive scaffolder for a new sovereign lane (§23.1). With
                                -out, generates device/emu products + route manifest and STAGES
                                the in-place soong patches (preview-then-apply).
+  repair-lane -name <l> -out <root> -scope <stock/path,...> [-suffix-parent-dirs <suffix>]
+                               Repair selected existing-lane subtrees using target-stock Kotlin
+                               source parity without reprinting unrelated Blueprints.
   create -stock -devices <a,b> -out <root>  Revive a DROPPED/net-new device family VERBATIM (no
                                "_<lane>" suffix, no finder/soong-config routing — there is no stock
                                parallel to drop). No external AOSP tree required: every cp2a device
@@ -259,6 +265,61 @@ func cmdVerify(args []string) int {
 	}
 	fmt.Println("VERDICT: NOT GREEN — run `audit` to classify the failures")
 	return 1
+}
+
+func cmdRepairLane(args []string) int {
+	fs := flag.NewFlagSet("repair-lane", flag.ContinueOnError)
+	name := fs.String("name", "", "existing lane name")
+	out := fs.String("out", "", "AOSP root containing the lane and target stock trees")
+	scopes := fs.String("scope", "", "comma-separated stock-relative subtree paths to repair")
+	parentSuffix := fs.String("suffix-parent-dirs", "", "immediate parent-directory suffix used by the lane")
+	if err := fs.Parse(args); err != nil {
+		return 2
+	}
+	*name = strings.TrimSpace(*name)
+	*out = strings.TrimSpace(*out)
+	if *name == "" || *out == "" || strings.TrimSpace(*scopes) == "" {
+		fmt.Fprintln(os.Stderr, "repair-lane: -name, -out, and at least one -scope are required")
+		return 2
+	}
+	for _, root := range []string{"frameworks-" + *name, "packages-" + *name} {
+		if info, err := os.Stat(filepath.Join(*out, root)); err != nil || !info.IsDir() {
+			fmt.Fprintf(os.Stderr, "repair-lane: lane root %s is missing\n", filepath.Join(*out, root))
+			return 1
+		}
+	}
+	c := LaneConfig{Name: *name, ParentDirSuffix: strings.TrimSpace(*parentSuffix)}
+	var laneScopes []string
+	for _, raw := range strings.Split(*scopes, ",") {
+		scope := filepath.ToSlash(filepath.Clean(strings.TrimSpace(raw)))
+		parts := strings.Split(scope, "/")
+		if len(parts) < 2 || parts[0] != "frameworks" && parts[0] != "packages" {
+			fmt.Fprintf(os.Stderr, "repair-lane: scope %q must start with frameworks/ or packages/\n", raw)
+			return 2
+		}
+		root, rel := parts[0], parts[1:]
+		if c.ParentDirSuffix != "" {
+			parent := -1
+			if root == "frameworks" && len(rel) > 2 && rel[0] == "base" && rel[1] == "packages" {
+				parent = 2
+			} else if root == "packages" && len(rel) > 1 && rel[0] == "apps" {
+				parent = 1
+			}
+			if parent >= 0 && !strings.HasSuffix(rel[parent], c.ParentDirSuffix) {
+				rel[parent] += c.ParentDirSuffix
+			}
+		}
+		laneScope := filepath.Join(append([]string{*out, root + "-" + c.Name}, rel...)...)
+		if _, err := os.Stat(laneScope); err != nil {
+			fmt.Fprintf(os.Stderr, "repair-lane: scope %s is missing from the lane\n", laneScope)
+			return 1
+		}
+		laneScopes = append(laneScopes, laneScope)
+	}
+	parity := runRepairInheritedKotlinSourceDriftIn(c, *out, laneScopes)
+	fmt.Printf("\nrepair-lane complete: %d Blueprint file(s), %d Kotlin path(s) removed, %d stock exclusion(s) restored.\n",
+		parity.Files, parity.Dropped, parity.Repointed)
+	return 0
 }
 
 func cmdCreate(args []string) int {

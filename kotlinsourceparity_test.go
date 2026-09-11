@@ -182,3 +182,35 @@ func TestRunRepairInheritedKotlinSourceDrift(t *testing.T) {
 		t.Fatalf("empty Kotlin glob survived:\n%s", got)
 	}
 }
+
+func TestRepairLaneCommandRepairsExistingPermissionHelper(t *testing.T) {
+	root := t.TempDir()
+	stockPath := filepath.Join(root, "packages/modules/Permission/SafetyCenter/InternalData/Android.bp")
+	lanePath := filepath.Join(root, "packages-holo/modules/Permission/SafetyCenter/InternalData/Android.bp")
+	if err := os.MkdirAll(filepath.Join(root, "frameworks-holo"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	for _, p := range []string{stockPath, lanePath} {
+		if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	stock := []byte("java_library {\n    name: \"safety-center-internal-data\",\n    srcs: [\"java/**/*.java\"],\n}\n")
+	lane := []byte("java_library {\n    name: \"safety-center-internal-data\",\n    srcs: [\"java/**/*.java\", \"java/**/*.kt\"],\n}\n")
+	if err := os.WriteFile(stockPath, stock, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(lanePath, lane, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if got := cmdRepairLane([]string{"-name", "holo", "-out", root, "-scope", "packages/modules/Permission/SafetyCenter/InternalData"}); got != 0 {
+		t.Fatalf("cmdRepairLane = %d, want 0", got)
+	}
+	got, err := os.ReadFile(lanePath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(got), "**/*.kt") {
+		t.Fatalf("repair-lane left empty Kotlin source glob:\n%s", got)
+	}
+}

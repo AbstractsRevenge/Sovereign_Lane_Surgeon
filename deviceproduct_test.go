@@ -40,6 +40,7 @@ func TestGenDeviceProduct(t *testing.T) {
 	}
 	universal := []string{
 		"PRODUCT_DEFAULT_DEV_CERTIFICATE := build/make/target/product/security/holo/holo_platform",
+		"Do not point it at a directory containing only a platform key",
 		"SOONG_CONFIG_holo_framework_routing_enable_holo_kotlinc := true",
 		"    system/priv-app/Holo%",
 		"PRODUCT_NAME := aosp_lynx_holo",

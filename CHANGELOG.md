@@ -44,6 +44,8 @@ active limitations remain in [CURRENT_STATE.md](CURRENT_STATE.md).
 - Fixed first-lane finder generation when no sibling suffix exists.
 - Fixed adding a second lane to a first lane whose cross-lane rule contains only `return false`.
 - Fixed stock isolation after Holo routing and derived-lane routing are both installed.
+- Fixed generated signing guidance that treated a standalone platform key as a complete release
+  key directory; named APK certificates and APEX keys share that lookup root.
 - Restored authored-file license coverage in the test suite.
 
 ### Validated

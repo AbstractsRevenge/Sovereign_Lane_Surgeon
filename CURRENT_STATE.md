@@ -205,6 +205,10 @@ runtime-install and boot-jar machinery attached, taken deliberately rather than 
 | Additional devices | ✅ Done (analysis gate) | all 16 cp2a devices with an AOSP tree; full builds for zuma/zumapro families on demand |
 | Docker/container support | 🟢 Low | Root-free path exists now (debugfs); containerizing is what remains |
 
+Lane release signing requires a complete key directory. `PRODUCT_DEFAULT_DEV_CERTIFICATE` controls
+the directory used for named APK certificates and APEX keys as well as the default application
+certificate, so a directory containing only `<lane>_platform` cannot complete a full build.
+
 ---
 
 ## 📊 Progress Tracker

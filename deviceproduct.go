@@ -146,10 +146,11 @@ $(call inherit-product, device/google/{{.SoC}}/aosp_common.mk){{else}}# TODO({{.
 # $(call inherit-product, device/google/<soc>/aosp_common.mk){{end}}
 $(call inherit-product, device/google/{{.Family}}-{{.Lane}}/device-{{.Product}}_{{.Lane}}.mk)
 
-# {{.CamelCase}} Platform Key — the lane's sovereign signing identity. Until you generate it, the
-# seed uses the inherited AOSP testkey so the lane BUILDS out of the box. TODO({{.Lane}}): generate
-# the key (development/tools/make_key build/make/target/product/security/{{.Lane}}/{{.Lane}}_platform
-# '/CN=Android/...'), then UNCOMMENT the line below so every certificate:"platform" module signs with it.
+# Development builds inherit AOSP's complete test-key directory and build out of the box. A custom
+# PRODUCT_DEFAULT_DEV_CERTIFICATE directory also becomes the lookup root for every named APK
+# certificate and APEX key. Do not point it at a directory containing only a platform key. For a
+# direct release-key build, install the complete release key set first; target-files re-signing is
+# the other supported release path.
 # PRODUCT_DEFAULT_DEV_CERTIFICATE := build/make/target/product/security/{{.Lane}}/{{.Lane}}_platform
 
 # bootable/deprecated-ota carries the updater's static libs (libupdater_device/core, libapplypatch,

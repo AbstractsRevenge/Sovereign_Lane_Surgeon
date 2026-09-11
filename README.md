@@ -29,6 +29,11 @@ hand edits, and checks its own work at every stage.
 **v1.0.0** (2026-09-04) is the milestone release: a factory image to a booting phone, achieved on
 three devices.
 
+Documentation is split by purpose: this README is the entry point,
+[CURRENT_STATE.md](CURRENT_STATE.md) carries the live proof matrix and active limitations,
+[CHANGELOG.md](CHANGELOG.md) records material changes and releases, [DESIGN.md](DESIGN.md) explains
+device revival, and [LANES.md](LANES.md) is the lane reference.
+
 ## The gap it closes
 
 These phones run android-17: Google publishes CP2A factory images for all twenty devices the

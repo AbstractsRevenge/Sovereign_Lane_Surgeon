@@ -17,9 +17,9 @@ limitations under the License.
 
 # Sovereign Lane Surgeon - Current State
 
-**Last Updated:** 2026-09-08 UTC  
-**Version:** v1.0.0  
-**Status:** **Port complete for every SoC generation cp2a ships.** All 16 devices `m nothing` green from `create -stock` alone; 9 full images (gs201 ×5, gs101, zuma, zumapro ×2 incl. the r31 tegu tree), every one `preflight` FLASHABLE; **cheetah boots the Surgeon-built android-17 image** — first 2026-09-03 01:12 UTC, re-proven 07:11 UTC on the build's **own** complete super. Seven siblings deferred by decision (no test devices). Next horizon: Holo transformations.  
+- **Last Updated:** 2026-09-10 UTC
+- **Version:** v1.0.0 plus current `main`
+- **Status:** **Port complete for every SoC generation cp2a ships.** All 16 devices `m nothing` green from `create -stock` alone; 9 full images (gs201 ×5, gs101, zuma, zumapro ×2 incl. the r31 tegu tree), every one `preflight` FLASHABLE; **cheetah boots the Surgeon-built android-17 image** — first 2026-09-03 01:12 UTC, re-proven 07:11 UTC on the build's **own** complete super. Seven siblings deferred by decision (no test devices). Android 15 Holo and Holo2 lane graphs are now proven alongside stock. Next horizon: Android 16 physical-device/lane establishment, followed by governed Holo UX refinement.
 
 ---
 
@@ -67,6 +67,24 @@ The Sovereign Lane Surgeon is a self-contained Go toolkit for creating parallel 
 
 ### Primary Goal
 **Complete the end-to-end pipeline that takes a Pixel factory image and produces a working AOSP 17 build for that physical device.** — Reached 2026-09-03: cheetah boots the Surgeon-built android-17 image.
+
+## Android 15 Holo lane result (2026-09-10)
+
+The lane toolkit now has a proven derived-lane case on AOSP `android-15.0.0_r36`:
+
+| Product | Identity model | Result |
+|---|---|---|
+| `aosp_cheetah_holo-bp1a-eng` | Holo keep-name | `m nothing` green |
+| `aosp_cheetah_holo2-bp1a-eng` | `_holo2` immediate-parent paths, keep-name modules | `m nothing` green |
+| `aosp_cheetah-bp1a-eng` | Stock control | `m nothing` green |
+
+Holo2 was generated from Holo with
+`-from holo -rename -suffix-parent-dirs _holo2`. Exactly 42 immediate parents under
+`frameworks-holo2/base/packages/` and 53 under `packages-holo2/apps/` were suffixed. Descendant
+paths and Soong module names stayed unchanged; rooted and relative Blueprint references,
+visibility boundaries, namespaces, and overlay symlinks were repointed to the physical parent
+paths. The final graphs had zero Holo/Holo2 content in stock, zero Holo content in Holo2, and zero
+stock-counterpart collisions in Holo2.
 
 ---
 
@@ -119,10 +137,10 @@ The Sovereign Lane Surgeon is a self-contained Go toolkit for creating parallel 
 ## 🔧 What We're Currently Working On
 
 ### Primary Task: android-17 port — done for the Pixel 7 family
-**Status (2026-09-03):** all 16 cp2a devices `m nothing` green from `create -stock` alone; full images for panther, cheetah, lynx, tangorpro; cheetah booted and toured. Remaining full builds beyond felix/oriole deferred by decision (no test devices for those families). Next horizon (T): Holo transformations on top of the revived devices.
+**Status (2026-09-10):** all 16 cp2a devices `m nothing` green from `create -stock` alone; full images for panther, cheetah, lynx, tangorpro; cheetah booted and toured. Remaining full builds beyond felix/oriole deferred by decision (no test devices for those families). Android 15 Holo2 derived-lane routing is green; Android 16 physical-device and lane establishment is next.
 
 ### Secondary Task: Documentation
-- [x] README, CURRENT_STATE, port changelog current as of 2026-09-03
+- [x] README and CURRENT_STATE updated; root CHANGELOG established 2026-09-10
 - [x] Known limitations and workarounds documented below
 - [x] `undefined-deps` + `dep-ledger` documented in README (2026-09-08)
 - [x] rename-vs-keep-name rule, seed-from-stock class, and the three `.bp`-unreachable rewrite sites documented (2026-09-09)
@@ -183,7 +201,7 @@ runtime-install and boot-jar machinery attached, taken deliberately rather than 
 | Full `m droid` validation | ✅ Done | cheetah booted 2026-09-03 |
 | `doctor` auto-apply | 🟡 Medium | Automated fix application from audit |
 | Kernel prebuilt fetch | ✅ Done | `assemble-kernel` from the factory image (v0.4.0) |
-| Android 16 support | 🟡 Medium | Test/update for AOSP 16 |
+| Android 16 support | 🟡 In progress | BP4A lane-product generation is implemented; physical-device and Holo build validation remain |
 | Additional devices | ✅ Done (analysis gate) | all 16 cp2a devices with an AOSP tree; full builds for zuma/zumapro families on demand |
 | Docker/container support | 🟢 Low | Root-free path exists now (debugfs); containerizing is what remains |
 

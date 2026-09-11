@@ -147,6 +147,7 @@ func printScaffoldPlan(c LaneConfig) {
 	fmt.Printf("  identity:   installables=%s<Name>, libs=%s-<base>, dirs=frameworks%s / packages%s\n", c.CamelCase, c.LibPrefix, c.DirSuffix, c.DirSuffix)
 	fmt.Println("  would create / patch:")
 	fmt.Printf("   1. mirror stock Android.bp → frameworks%s/ + packages%s/ (bpedits, byte-exact; v2)\n", c.DirSuffix, c.DirSuffix)
+	fmt.Println("      + compare inherited Kotlin src/exclude paths with target stock; drop only empty lane additions")
 	fmt.Println("   2. soong patches (v2): finder.go (is<Lane>Product + apply<Lane>BpRoutes + route manifest),")
 	fmt.Println("      aar.go (isLaneLunch + dir-guarded shouldSuppressStock* for framework-class),")
 	fmt.Println("      visibility.go (laneCanonicalPkgs), androidmk.go (keep-name preference hook)")
@@ -172,5 +173,5 @@ func printScaffoldPlan(c LaneConfig) {
 		fmt.Printf("   5. cuttlefish: aosp_cf_x86_64_phone_%s + _tablet_%s (shared cuttlefish tree; launch --config=tablet)\n", c.Name, c.Name)
 	}
 	fmt.Printf("   6. verify: aosp_build_capture -lane %s -build-cmd 'm -jN nothing' → then `audit` to enumerate fork gaps\n", c.Name)
-	fmt.Println("\n(Dry run — nothing was written. Re-run with -out <aosp-root> to generate: bp mirror,\n device/emu products, requalify + stock-source relocation, lane-tool fixes, route manifest,\n and the STAGED soong patches. Then `apply -out <root>` commits those patches.)")
+	fmt.Println("\n(Dry run — nothing was written. Re-run with -out <aosp-root> to generate: bp mirror,\n device/emu products, requalify + stock-source relocation, Kotlin source parity, lane-tool fixes,\n route manifest, and the STAGED soong patches. Then `apply -out <root>` commits those patches.)")
 }

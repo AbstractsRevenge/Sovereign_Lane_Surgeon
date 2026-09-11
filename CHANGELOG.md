@@ -29,6 +29,8 @@ active limitations remain in [CURRENT_STATE.md](CURRENT_STATE.md).
   `-rename -suffix-parent-dirs <suffix>`. Descendant paths and module names remain unchanged.
 - Added complete source-lane device inheritance for `create -from`, preserving curated packages,
   overlays, properties, signing identity, hardware wiring, and route manifests.
+- Added target-stock Kotlin source parity during lane creation. The pass retains target-owned and
+  real lane Kotlin while removing inherited `.kt` paths that resolve to no effective source.
 
 ### Changed
 
@@ -46,6 +48,8 @@ active limitations remain in [CURRENT_STATE.md](CURRENT_STATE.md).
 - Fixed stock isolation after Holo routing and derived-lane routing are both installed.
 - Fixed generated signing guidance that treated a standalone platform key as a complete release
   key directory; named APK certificates and APEX keys share that lookup root.
+- Fixed inherited empty Kotlin globs silently adding Kotlin runtime dependencies to Java framework
+  and system-server jars, and restored stock `java/` exclusions changed to `kotlin/` paths.
 - Restored authored-file license coverage in the test suite.
 
 ### Validated

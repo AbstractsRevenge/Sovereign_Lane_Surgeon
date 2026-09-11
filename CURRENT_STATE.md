@@ -17,7 +17,7 @@ limitations under the License.
 
 # Sovereign Lane Surgeon - Current State
 
-- **Last Updated:** 2026-09-10 UTC
+- **Last Updated:** 2026-09-11 UTC
 - **Version:** v1.0.0 plus current `main`
 - **Status:** **Port complete for every SoC generation cp2a ships.** All 16 devices `m nothing` green from `create -stock` alone; 9 full images (gs201 ×5, gs101, zuma, zumapro ×2 incl. the r31 tegu tree), every one `preflight` FLASHABLE; **cheetah boots the Surgeon-built android-17 image** — first 2026-09-03 01:12 UTC, re-proven 07:11 UTC on the build's **own** complete super. Seven siblings deferred by decision (no test devices). Android 15 Holo and Holo2 lane graphs are now proven alongside stock. Next horizon: Android 16 physical-device/lane establishment, followed by governed Holo UX refinement.
 
@@ -86,6 +86,15 @@ visibility boundaries, namespaces, and overlay symlinks were repointed to the ph
 paths. The final graphs had zero Holo/Holo2 content in stock, zero Holo content in Holo2, and zero
 stock-counterpart collisions in Holo2.
 
+The Holo2 full-build investigation exposed a source-payload defect inherited from Holo: earlier
+Android 15 edits had added `.kt` globs that matched no effective Kotlin sources and had redirected
+an AdServices `java/` exclusion into `kotlin/`. Soong classifies a module from the literal source
+entries before glob expansion, so the empty paths still attached Kotlin runtime libraries to
+`framework.jar` and `service-adservices.jar`. `create` now runs target-stock Kotlin source parity
+before module renaming: it drops only lane-added empty `.kt` paths, retains real or target-owned
+Kotlin, and restores an exact stock `java/` exclusion. Regression coverage includes Blueprint
+`**` matching, exclusion-aware source checks, AdServices repair, and `_holo2` parent mapping.
+
 ---
 
 ## ✅ What's Working
@@ -98,7 +107,7 @@ stock-counterpart collisions in Holo2.
 | AST operations | ✅ Working | Blueprint/Go AST patching (no regex): rename, drop-dep, requalify, cflag drop, AIDL re-pin, defaults pinning, header_libs add |
 | Uninstall/rollback | ✅ Working | Byte-identical reversal |
 | Audit/classification | ✅ Working | 23-class taxonomy incl. the android-17 classes (illegal cflag, AIDL version conflict, system-props artifact path, neverallow violation, stale generated mk, kernel module rule collision) |
-| Test suite | ✅ Working | run on every push by CI (badge in README); 142 tests (`go test ./...`), including an **end-to-end seed** from the embedded bundle into a temp root (and, with `SLS_TEST_FACTORY_ROOT` set, the full vendor-blob pipeline); `docs_test.go` fails the suite when README/CURRENT_STATE drift from the code |
+| Test suite | ✅ Working | run on every push by CI (badge in README); 168 tests (`go test ./...`), including an **end-to-end seed** from the embedded bundle into a temp root (and, with `SLS_TEST_FACTORY_ROOT` set, the full vendor-blob pipeline); `docs_test.go` fails the suite when README/CURRENT_STATE drift from the code |
 
 ### Device Revival (`create -stock`)
 | Component | Status | Details |

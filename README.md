@@ -101,7 +101,11 @@ stubs.
 That command maps `frameworks-holo/base/packages/SystemUI/` to
 `frameworks-holo2/base/packages/SystemUI_holo2/` and `packages-holo/apps/Settings/` to
 `packages-holo2/apps/Settings_holo2/`. Files and modules below those parents keep their source
-names.
+names. During the copy, the surgeon also compares inherited `srcs` and `exclude_srcs` entries with
+the stock Blueprint in the target checkout. It removes a lane-added `.kt` path only when stock
+does not own it and it resolves to no effective Kotlin source after exclusions; real lane Kotlin
+and target-owned Kotlin remain intact. This prevents an empty Kotlin glob from making Soong attach
+the Kotlin runtime to Java framework or system-server jars.
 
 Device revival grew out of that: a revived Pixel is a lane's stock foundation, seeded from the
 same `create` command with `-stock`. The lane toolkit is documented in full in

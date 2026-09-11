@@ -376,6 +376,11 @@ func writeScaffold(c LaneConfig, outRoot string) int {
 		// parents. Repoint rooted build references to those physical paths without changing any
 		// descendant directory, filename, Java namespace, or Blueprint module name.
 		runRewriteParentSuffixPaths(c, outRoot)
+		// A source lane may carry stale source globs that never resolve in this target. Soong
+		// still treats a literal .kt glob as Kotlin and can pull the runtime into framework or
+		// system-server jars. Compare with this checkout's stock Blueprints before module
+		// renaming so the repair is release-aware and module identities still line up exactly.
+		runRepairInheritedKotlinSourceDrift(c, outRoot)
 		// rename model only (no-op for keep-name): tier 1 installables (+overrides), then tier 2
 		// libraries (rename + repoint every dep ref in lockstep).
 		runRenameInstallables(c, outRoot)

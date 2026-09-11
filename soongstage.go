@@ -87,6 +87,22 @@ func stageSoongPatches(c LaneConfig, outRoot string) (staged int, fatal bool) {
 		fmt.Fprintf(os.Stderr, "  ! patch visibility.go: %v\n", err)
 		return 0, true
 	}
+	if c.ParentDirSuffix != "" {
+		var rootChanged bool
+		visOut, rootChanged, err = PatchLaneRootVisibility(visOut)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "  ! patch lane-root visibility: %v\n", err)
+			return 0, true
+		}
+		vChanged = vChanged || rootChanged
+		var parentChanged bool
+		visOut, parentChanged, err = PatchParentDirSuffixVisibility(visOut, c.ParentDirSuffix)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "  ! patch parent-directory visibility: %v\n", err)
+			return 0, true
+		}
+		vChanged = vChanged || parentChanged
+	}
 	targets = append(targets, soongTarget{visRel, visOut, vChanged})
 
 	// neverallow.go: allowlist the lane's ravenwood/layoutlib paths. Only relevant when the lane

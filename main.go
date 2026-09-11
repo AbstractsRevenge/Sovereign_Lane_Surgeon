@@ -273,6 +273,7 @@ func cmdCreate(args []string) int {
 	from := fs.String("from", "", "seed this lane from an EXISTING LANE instead of stock (e.g. -from holo): defaults -fork to that lane's roots, repoints its labels/paths onto the new lane, and inherits its curated bp drop-list. A lane-sourced fork inherits the source's directory RELOCATIONS, which the per-file drop rule cannot derive.")
 	forkExclude := fs.String("fork-exclude", "", "comma-separated subpaths to LEAVE stock inside a fork (namespace-complex, e.g. frameworks/base/packages/SystemUI)")
 	prefixDirs := fs.String("prefix-dirs", "", "physical directory prefix when KeepName is false (e.g. NexusM)")
+	suffixParentDirs := fs.String("suffix-parent-dirs", "", "path-only rename: suffix immediate frameworks/base/packages and packages/apps parents (e.g. _holo2); keeps descendant and module names unchanged")
 	noCompose := fs.Bool("no-compose", false, "experimental: bypass AndroidX/Compose (Nexus-Modern style — leave Compose/AndroidX subtrees stock, auto-drop their dep refs, scope SystemUI srcs to the re-authored kotlin/ tree)")
 	stock := fs.Bool("stock", false, "seed a DROPPED/net-new device family verbatim from -source-root instead of forking a lane — no \"_<lane>\" suffix, no finder/soong-config routing (there is no stock parallel to drop when the device never existed in the target tree)")
 	sourceRoot := fs.String("source-root", "", "stock mode: the AOSP tree to mirror device content FROM (required with -stock)")
@@ -284,6 +285,14 @@ func cmdCreate(args []string) int {
 	bundleDir := fs.String("bundle-dir", "", "bundle content from this directory (verified against the embedded manifest) instead of the binary/cache; also $SLS_BUNDLE_DIR")
 	bundleURL := fs.String("bundle-url", "", "fetch the bundle archive (.tar.gz from `bundle export`) into the cache when the binary carries none (-tags nobundle); also $SLS_BUNDLE_URL")
 	_ = fs.Parse(args)
+	if *prefixDirs != "" && *suffixParentDirs != "" {
+		fmt.Fprintln(os.Stderr, "create: -prefix-dirs and -suffix-parent-dirs are mutually exclusive")
+		return 2
+	}
+	if *suffixParentDirs != "" && !*rename {
+		fmt.Fprintln(os.Stderr, "create: -suffix-parent-dirs requires -rename")
+		return 2
+	}
 
 	if err := resolveBundle(*bundleDir, *bundleURL, *stock); err != nil {
 		fmt.Fprintln(os.Stderr, "create:", err)
@@ -352,6 +361,7 @@ func cmdCreate(args []string) int {
 		}
 		for _, nm := range names {
 			c := deriveLane(nm, !*rename, devs, *goldfish, *cuttlefish, *prefixDirs)
+			c.ParentDirSuffix = *suffixParentDirs
 			c.Release = strings.ToLower(strings.TrimSpace(*release))
 			c.Forks = forks
 			c.ForkExclude = forkExcludes
@@ -374,6 +384,7 @@ func cmdCreate(args []string) int {
 		}
 		c.Forks = forks
 		c.ForkExclude = forkExcludes
+		c.ParentDirSuffix = *suffixParentDirs
 		c.Release = strings.ToLower(strings.TrimSpace(*release))
 		cfgs = append(cfgs, c)
 		fmt.Println()

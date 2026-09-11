@@ -37,11 +37,12 @@ import (
 // handles the cross-cutting edits that blind the EXISTING lanes to the new one.
 
 type finderTmplData struct {
-	Lane        string // "aurora"
-	Camel       string // "Aurora" — CamelCase lib/module prefix (shared-infra additions: Aurora<name>)
-	DirSuffix   string // "-aurora"
-	DirPrefix   string // "AuroraM"-style identity-app dir/module prefix (rename model); "" for keep-name
-	SuffixChain string // pre-built "strings.HasSuffix(comp, \"-holo\") || ..." (tabs handled by gofmt)
+	Lane            string // "aurora"
+	Camel           string // "Aurora" — CamelCase lib/module prefix (shared-infra additions: Aurora<name>)
+	DirSuffix       string // "-aurora"
+	DirPrefix       string // "AuroraM"-style identity-app dir/module prefix (rename model); "" for keep-name
+	ParentDirSuffix string // "_holo2"-style immediate parent suffix; module names remain keep-name
+	SuffixChain     string // pre-built "strings.HasSuffix(comp, \"-holo\") || ..." (tabs handled by gofmt)
 	// HasOtherLanes is true iff there is at least one sibling lane to be blind to. When false (the
 	// first lane on a fresh tree — the native Holo Lanes adoption case), isOtherLaneBpFor<Lane> must
 	// omit its component loop entirely: a "for _, comp := range … { if false {…} }" body leaves comp
@@ -400,6 +401,26 @@ var finderKeepNameApplyTmpl = template.Must(template.New("keepnameapply").Parse(
 		"\t\treturn \"\"\n" +
 		"\t}\n" +
 		"\tbaseCandidates := append([]string(nil), candidates...)\n" +
+		"\tconst parentDirSuffix = \"{{.ParentDirSuffix}}\"\n" +
+		"\tif parentDirSuffix != \"\" {\n" +
+		"\t\tfor _, candidate := range baseCandidates {\n" +
+		"\t\t\tparts := strings.Split(candidate, \"/\")\n" +
+		"\t\t\tparent := -1\n" +
+		"\t\t\tswitch {\n" +
+		"\t\t\tcase len(parts) >= 4 && parts[0] == \"frameworks\" && parts[1] == \"base\" && parts[2] == \"packages\":\n" +
+		"\t\t\t\tparent = 3\n" +
+		"\t\t\tcase len(parts) >= 3 && parts[0] == \"packages\" && parts[1] == \"apps\":\n" +
+		"\t\t\t\tparent = 2\n" +
+		"\t\t\tcase len(parts) >= 2 && parts[0] == \"apps\":\n" +
+		"\t\t\t\tparent = 1\n" +
+		"\t\t\t}\n" +
+		"\t\t\tif parent >= 0 && strings.HasSuffix(parts[parent], parentDirSuffix) {\n" +
+		"\t\t\t\tparts[parent] = strings.TrimSuffix(parts[parent], parentDirSuffix)\n" +
+		"\t\t\t\tcandidates = append(candidates, strings.Join(parts, \"/\"))\n" +
+		"\t\t\t}\n" +
+		"\t\t}\n" +
+		"\t}\n" +
+		"\tbaseCandidates = append([]string(nil), candidates...)\n" +
 		"\tfor _, candidate := range baseCandidates {\n" +
 		"\t\tif strings.Contains(candidate, \"/kotlin/\") {\n" +
 		"\t\t\tcandidates = append(candidates, strings.ReplaceAll(candidate, \"/kotlin/\", \"/java/\"))\n" +
@@ -453,7 +474,7 @@ func genFinderLaneFuncs(c LaneConfig, otherSuffixes []string) (string, error) {
 	if chain == "" {
 		chain = "false" // no sibling lanes yet
 	}
-	data := finderTmplData{Lane: c.Name, Camel: c.CamelCase, DirSuffix: c.DirSuffix, DirPrefix: c.DirPrefix, SuffixChain: chain, HasOtherLanes: len(otherSuffixes) > 0}
+	data := finderTmplData{Lane: c.Name, Camel: c.CamelCase, DirSuffix: c.DirSuffix, DirPrefix: c.DirPrefix, ParentDirSuffix: c.ParentDirSuffix, SuffixChain: chain, HasOtherLanes: len(otherSuffixes) > 0}
 	var sb strings.Builder
 	if err := finderSharedTmpl.Execute(&sb, data); err != nil {
 		return "", err
@@ -461,7 +482,7 @@ func genFinderLaneFuncs(c LaneConfig, otherSuffixes []string) (string, error) {
 	sb.WriteString("\n")
 	// KEEP-NAME (Holo) → per-file replacement; RENAME (NexusM) → drop-other + manifest only.
 	applyTmpl := finderRenameApplyTmpl
-	if c.KeepName {
+	if keepsModuleNames(c) {
 		applyTmpl = finderKeepNameApplyTmpl
 	}
 	if err := applyTmpl.Execute(&sb, data); err != nil {

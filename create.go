@@ -24,19 +24,20 @@ import (
 
 // LaneConfig is the identity of a sovereign lane, derived from one prompt (the name).
 type LaneConfig struct {
-	Name        string // "holo"
-	CamelCase   string // "Holo" — installable module prefix
-	LibPrefix   string // "holo" — lowercase, for internal lib names (holo-<base>)
-	DirSuffix   string // "-holo" — frameworks-holo, packages-holo, device/google/<dev>-holo
-	KeepName    bool   // true = keep-name + finder replacement (Holo model); false = rename + overrides (NexusM model)
-	Devices     []string
-	Goldfish    bool
-	Cuttlefish  bool
-	Forks       []string // stock subtrees to clone into the lane tree (frameworks/..., packages/...)
-	ForkExclude []string // subpaths to LEAVE stock inside a fork (namespace-complex, e.g. frameworks/base/packages/SystemUI)
-	DirPrefix   string   // physical directory prefix when KeepName is false (e.g. NexusM)
-	FromLane    string   // source LANE to fork from (e.g. "holo") instead of stock; "" = stock fork
-	NoCompose   bool     // OPTIONAL experimental premise: bypass AndroidX/Compose (Nexus-Modern style —
+	Name            string // "holo"
+	CamelCase       string // "Holo" — installable module prefix
+	LibPrefix       string // "holo" — lowercase, for internal lib names (holo-<base>)
+	DirSuffix       string // "-holo" — frameworks-holo, packages-holo, device/google/<dev>-holo
+	KeepName        bool   // true = keep-name + finder replacement (Holo model); false = rename + overrides (NexusM model)
+	Devices         []string
+	Goldfish        bool
+	Cuttlefish      bool
+	Forks           []string // stock subtrees to clone into the lane tree (frameworks/..., packages/...)
+	ForkExclude     []string // subpaths to LEAVE stock inside a fork (namespace-complex, e.g. frameworks/base/packages/SystemUI)
+	DirPrefix       string   // physical directory prefix when KeepName is false (e.g. NexusM)
+	ParentDirSuffix string   // path-only rename for immediate app/package parents (e.g. _holo2); module names stay unchanged
+	FromLane        string   // source LANE to fork from (e.g. "holo") instead of stock; "" = stock fork
+	NoCompose       bool     // OPTIONAL experimental premise: bypass AndroidX/Compose (Nexus-Modern style —
 	//              exclude/leave-stock the Compose/AndroidX/Jetpack subtrees, auto-drop their dep
 	//              refs, and scope SystemUI-class srcs to the re-authored View-in-Kotlin kotlin/ tree).
 
@@ -51,6 +52,13 @@ type LaneConfig struct {
 	HWSubtrees        []string // non-device subtrees to mirror verbatim (e.g. hardware/google/gchips)
 	FactoryImagesRoot string   // parent dir of per-device factory-image extraction dirs (<root>/<device>/...), for vendor blob wiring
 	Release           string   // target release config (e.g. bp4a/cp2a) — used by lane lunches and stock kernel assembly
+}
+
+// keepsModuleNames reports whether the lane's Blueprint module identities remain stock-shaped.
+// Parent-suffix lanes rename only physical package directories; their modules and descendants stay
+// unchanged and therefore use the keep-name finder replacement model.
+func keepsModuleNames(c LaneConfig) bool {
+	return c.KeepName || c.ParentDirSuffix != ""
 }
 
 func deriveLane(name string, keepName bool, devices []string, goldfish, cuttlefish bool, dirPrefix string) LaneConfig {
@@ -130,7 +138,9 @@ func gatherLaneConfigInteractive() (LaneConfig, bool) {
 
 func printScaffoldPlan(c LaneConfig) {
 	model := "keep-name + finder replacement"
-	if !c.KeepName {
+	if c.ParentDirSuffix != "" {
+		model = "parent-directory suffix + keep-name modules"
+	} else if !c.KeepName {
 		model = "rename identity apps + overrides (Model-A hybrid: keep-name framework-class)"
 	}
 	fmt.Printf("PLAN for lane %q  (model: %s)\n", c.Name, model)
@@ -140,7 +150,9 @@ func printScaffoldPlan(c LaneConfig) {
 	fmt.Println("   2. soong patches (v2): finder.go (is<Lane>Product + apply<Lane>BpRoutes + route manifest),")
 	fmt.Println("      aar.go (isLaneLunch + dir-guarded shouldSuppressStock* for framework-class),")
 	fmt.Println("      visibility.go (laneCanonicalPkgs), androidmk.go (keep-name preference hook)")
-	if !c.KeepName {
+	if c.ParentDirSuffix != "" {
+		fmt.Printf("      + immediate app/package parents suffixed %q; descendants and module names unchanged\n", c.ParentDirSuffix)
+	} else if !c.KeepName {
 		fmt.Println("      + per-installable overrides:[\"<stock>\"] (rename model — identity apps + libs renamed;")
 		fmt.Println("        framework-class stays KEEP-NAME/Model-A hybrid: finder-drop + aar.go suppressors, NOT stem+phony)")
 	}

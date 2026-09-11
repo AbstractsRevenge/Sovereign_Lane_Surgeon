@@ -188,7 +188,12 @@ func requalifyPath(body, lead, outRoot string, laneMap map[string]string, cache 
 			// Getting this wrong in either direction is a build error — too broad reverts the pods
 			// (5 "depends on undefined module" at soong), too narrow leaves the native_bridge_support
 			// label pointing at a bp the finder never loads.
-			if modPart != "" && !strings.Contains("/"+lanePath, "/pods/") &&
+			// Visibility pseudo-targets describe a package boundary; they do not resolve a module
+			// from the namespace. They must follow a lane-sourced root (`//frameworks-holo:
+			// __subpackages__` -> `//frameworks-holo2:__subpackages__`) even though the root
+			// Android.bp declares the lane namespace.
+			isVisibilityTarget := modPart == ":__subpackages__" || modPart == ":__pkg__"
+			if modPart != "" && !isVisibilityTarget && !strings.Contains("/"+lanePath, "/pods/") &&
 				laneDirDeclaresNamespace(outRoot, lanePath, cache) {
 				return orig
 			}

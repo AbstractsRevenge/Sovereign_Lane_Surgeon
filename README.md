@@ -79,6 +79,25 @@ products will register `aosp_<device>_<lane>-bp4a-{eng,userdebug,user}`.
     -out /home/abstractsrevenge/AOSP_Workspace/android-16.0.0_r4
 ```
 
+A differentiated lane can inherit a proven lane while changing only the immediate app/package
+parent directories. `-suffix-parent-dirs` leaves every descendant path, filename, Java namespace,
+and Blueprint module name unchanged. With `-from`, the surgeon also inherits the source lane's
+complete device product and route manifest instead of replacing its curated wiring with generic
+stubs.
+
+```bash
+./sovereign-lane-surgeon create \
+    -name holo2 -from holo -rename -suffix-parent-dirs _holo2 \
+    -devices cheetah -goldfish=false -cuttlefish=false -release bp1a \
+    -out /path/to/android-15.0.0_r36
+./sovereign-lane-surgeon apply -out /path/to/android-15.0.0_r36
+```
+
+That command maps `frameworks-holo/base/packages/SystemUI/` to
+`frameworks-holo2/base/packages/SystemUI_holo2/` and `packages-holo/apps/Settings/` to
+`packages-holo2/apps/Settings_holo2/`. Files and modules below those parents keep their source
+names.
+
 Device revival grew out of that: a revived Pixel is a lane's stock foundation, seeded from the
 same `create` command with `-stock`. The lane toolkit is documented in full in
 [LANES.md](LANES.md), including the sixteen blocker classes a whole-root fork of `frameworks/` and

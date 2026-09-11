@@ -85,7 +85,32 @@ func appendSuffixToOtherLaneFunc(src []byte, funcName, newSuffix string) (out []
 		return true
 	})
 	if last == nil {
-		return nil, false, fmt.Errorf("no strings.HasSuffix(comp, ...) chain in func %q", funcName)
+		// The first lane in a tree has no siblings, so its generated function intentionally ends
+		// in a bare `return false` with no suffix loop. Adding the second lane is the first time
+		// that function needs a predicate; seed the loop before its final false return. Later
+		// lanes take the normal OR-chain path above.
+		var finalFalse *ast.ReturnStmt
+		ast.Inspect(fd.Body, func(n ast.Node) bool {
+			rs, ok := n.(*ast.ReturnStmt)
+			if !ok || len(rs.Results) != 1 {
+				return true
+			}
+			id, ok := rs.Results[0].(*ast.Ident)
+			if ok && id.Name == "false" && (finalFalse == nil || rs.Pos() > finalFalse.Pos()) {
+				finalFalse = rs
+			}
+			return true
+		})
+		if finalFalse == nil {
+			return nil, false, fmt.Errorf("no suffix chain or final false return in func %q", funcName)
+		}
+		off := fset.Position(finalFalse.Pos()).Offset
+		ins := []byte(fmt.Sprintf("for _, comp := range strings.Split(bp, \"/\") {\n\t\tif strings.HasSuffix(comp, %q) {\n\t\t\treturn true\n\t\t}\n\t}\n\t", newSuffix))
+		out = append(append(append([]byte{}, src[:off]...), ins...), src[off:]...)
+		if _, perr := parser.ParseFile(token.NewFileSet(), "", out, 0); perr != nil {
+			return nil, false, fmt.Errorf("post-splice reparse failed: %w", perr)
+		}
+		return out, true, nil
 	}
 	pos := fset.Position(last.Pos())
 	indent := strings.Repeat("\t", pos.Column-1) // operand's own indentation (tabs = 1 col each)

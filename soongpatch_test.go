@@ -48,6 +48,27 @@ func laneCanonicalPkgs(pkg string) []string {
 }
 `
 
+const laneCanonicalPkgsRootSample = `package android
+
+import "strings"
+
+func laneCanonicalPkgs(pkg string) []string {
+	out := []string{pkg}
+	slash := strings.IndexByte(pkg, '/')
+	if slash < 0 {
+		return out
+	}
+	first, rest := pkg[:slash], pkg[slash:]
+	for _, suf := range []string{"-holo", "-holo2"} {
+		if strings.HasSuffix(first, suf) {
+			out = append(out, first[:len(first)-len(suf)]+rest)
+			break
+		}
+	}
+	return out
+}
+`
+
 // TestAppendStringElemReproduce: strip a lane from the real-shaped sample, re-add via the
 // patcher, and require byte-identical reproduction — proof the codegen reproduces the
 // hand-written registration exactly (isLaneLunch, where nexusm is the LAST element).
@@ -86,6 +107,70 @@ func TestAppendStringElemSetEqual(t *testing.T) {
 	}
 	if strings.Contains(string(out), `out := []string{pkg, "-nexusm"}`) {
 		t.Fatalf("suffix was incorrectly added to canonical package results:\n%s", out)
+	}
+}
+
+func TestPatchParentDirSuffixVisibilityIsScopedAndIdempotent(t *testing.T) {
+	src, _, err := PatchLaneCanonicalPkgs([]byte(laneCanonicalPkgsSample), "holo2")
+	if err != nil {
+		t.Fatal(err)
+	}
+	out, changed, err := PatchParentDirSuffixVisibility(src, "_holo2")
+	if err != nil || !changed {
+		t.Fatalf("patch = (%v, %v), want (changed, nil)", changed, err)
+	}
+	for _, want := range []string{
+		"parent-directory suffix visibility",
+		`[]string{"_holo2"}`,
+		`parts[0] == "frameworks"`,
+		`parts[2] == "packages"`,
+		`parts[0] == "apps"`,
+	} {
+		if !strings.Contains(string(out), want) {
+			t.Errorf("parent visibility patch missing %q:\n%s", want, out)
+		}
+	}
+	if strings.Contains(string(out), `for i := range parts`) {
+		t.Fatalf("patch must not strip suffixes from arbitrary descendants:\n%s", out)
+	}
+	if formatted, ferr := format.Source(out); ferr != nil || string(formatted) != string(out) {
+		t.Fatalf("patched visibility is not gofmt-clean: %v\n--- got ---\n%s\n--- formatted ---\n%s", ferr, out, formatted)
+	}
+	out2, changed2, err := PatchParentDirSuffixVisibility(out, "_holo2")
+	if err != nil || changed2 || string(out2) != string(out) {
+		t.Fatalf("second patch should be idempotent: changed=%v err=%v", changed2, err)
+	}
+}
+
+func TestPatchLaneRootVisibilityIsGofmtCleanAndIdempotent(t *testing.T) {
+	out, changed, err := PatchLaneRootVisibility([]byte(laneCanonicalPkgsRootSample))
+	if err != nil || !changed {
+		t.Fatalf("patch = (%v, %v), want (changed, nil)", changed, err)
+	}
+	for _, want := range []string{
+		"lane-root visibility",
+		`[]string{"frameworks", "packages"}`,
+		`strings.HasPrefix(pkg, root+"-")`,
+		`out = append(out, root)`,
+	} {
+		if !strings.Contains(string(out), want) {
+			t.Errorf("root visibility patch missing %q:\n%s", want, out)
+		}
+	}
+	if formatted, ferr := format.Source(out); ferr != nil || string(formatted) != string(out) {
+		t.Fatalf("patched visibility is not gofmt-clean: %v\n--- got ---\n%s\n--- formatted ---\n%s", ferr, out, formatted)
+	}
+	out2, changed2, err := PatchLaneRootVisibility(out)
+	if err != nil || changed2 || string(out2) != string(out) {
+		t.Fatalf("second patch should be idempotent: changed=%v err=%v", changed2, err)
+	}
+	out3, changed3, err := PatchLaneCanonicalPkgs(out, "aurora")
+	if err != nil || !changed3 {
+		t.Fatalf("lane registry append after root support = (%v, %v)", changed3, err)
+	}
+	if !strings.Contains(string(out3), `[]string{"-holo", "-holo2", "-aurora"}`) ||
+		!strings.Contains(string(out3), `[]string{"frameworks", "packages"}`) {
+		t.Fatalf("lane suffix was appended to the wrong range registry:\n%s", out3)
 	}
 }
 
@@ -208,6 +293,7 @@ func TestCheckLaneSuffixCollision(t *testing.T) {
 		"external/kotlinx.coroutines/kotlinx-coroutines-test",
 		"frameworks-holotest/base", // the lane's OWN root must never count against it
 		"packages-holotest/apps",
+		"device/google/pantah-holotest", // lane-owned device family must allow idempotent re-runs
 		"external/guava",
 	} {
 		if err := os.MkdirAll(filepath.Join(root, d), 0o755); err != nil {

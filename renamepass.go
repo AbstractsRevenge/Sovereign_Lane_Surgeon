@@ -467,7 +467,7 @@ func dropDepsBp(content []byte, drop map[string]bool) ([]byte, bool, error) {
 // runRenameLibs is tier 2: collect the lane lib rename-map, then rename + repoint across the tree.
 // RENAME-model only.
 func runRenameLibs(c LaneConfig, outRoot string) (changed, failed int) {
-	if c.KeepName {
+	if keepsModuleNames(c) {
 		return 0, 0
 	}
 	rename := collectLibRenames(outRoot, c)
@@ -507,7 +507,7 @@ func runRenameLibs(c LaneConfig, outRoot string) (changed, failed int) {
 // runRenameInstallables walks the lane's cloned frameworks-<lane>/ + packages-<lane>/ trees and
 // applies the installable rename. Only runs for the RENAME model (KeepName=false).
 func runRenameInstallables(c LaneConfig, outRoot string) (changed, failed int) {
-	if c.KeepName {
+	if keepsModuleNames(c) {
 		return 0, 0
 	}
 	fmt.Printf("\nrename installables (name → %s<Name> + overrides, AST-safe):\n", c.CamelCase)

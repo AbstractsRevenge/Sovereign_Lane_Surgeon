@@ -394,6 +394,11 @@ func title(s string) string {
 // so the lane device dir is COMPLETE + self-contained (all HW files + subdirs), per the proven
 // lynx-nexusm model — see copyDeviceFamilyTree.
 func writeDeviceProducts(c LaneConfig, outRoot string) (wrote, skipped int, fatal bool) {
+	if c.FromLane != "" {
+		if w, s, handled, failed := writeDeviceProductsFromLane(c, outRoot); handled {
+			return w, s, failed
+		}
+	}
 	copiedFamilies := map[string]bool{}
 	for _, product := range c.Devices {
 		// Seed device/google/<family> from the embedded asset bundle FIRST if -out has no such

@@ -143,6 +143,25 @@ func TestRequalifyBarePathIsConservative(t *testing.T) {
 	}
 }
 
+func TestRequalifyVisibilityTargetAcrossNamespacedLaneRoot(t *testing.T) {
+	root := t.TempDir()
+	laneRoot := filepath.Join(root, "frameworks-holo2")
+	if err := os.MkdirAll(laneRoot, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(laneRoot, "Android.bp"), []byte("soong_namespace {}\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	m := map[string]string{"frameworks-holo": "frameworks-holo2"}
+	cache := map[string]bool{}
+	if got := requalifyLabel("//frameworks-holo:__subpackages__", root, m, cache, false, ""); got != "//frameworks-holo2:__subpackages__" {
+		t.Fatalf("visibility root was not requalified: %q", got)
+	}
+	if got := requalifyLabel("//frameworks-holo:real-module", root, m, cache, false, ""); got != "//frameworks-holo:real-module" {
+		t.Fatalf("real module must retain namespace guard: %q", got)
+	}
+}
+
 // A lane-sourced clone keeps its source lane's soong_config namespace, which is NOT a path — so
 // no path rewrite reaches it, and a condition naming a namespace the new lunch never sets quietly
 // takes the default (stock) branch of the lane's own lane-aware select.

@@ -16,6 +16,7 @@
 package main
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"go/ast"
@@ -134,6 +135,10 @@ func appendStringElemToRangeSlice(src []byte, funcName, newElem string) (out []b
 			if !ok {
 				return true
 			}
+			value, ok := rs.Value.(*ast.Ident)
+			if !ok || value.Name != "suf" {
+				return true
+			}
 			cl, ok := rs.X.(*ast.CompositeLit)
 			if !ok {
 				return true
@@ -188,6 +193,183 @@ func PatchIsLaneLunch(src []byte, lane string) ([]byte, bool, error) {
 // (the lane→stock package-dir mapping used for visibility resolution).
 func PatchLaneCanonicalPkgs(src []byte, lane string) ([]byte, bool, error) {
 	return appendStringElemToRangeSlice(src, "laneCanonicalPkgs", "-"+lane)
+}
+
+// PatchLaneRootVisibility canonicalizes root-wide visibility grants such as
+// //frameworks-holo:__subpackages__. laneCanonicalPkgs historically returned early for package
+// strings without '/', so a derived lane could not match the source lane's root-wide grant even
+// though both are canonical parallels of frameworks/. The root names are structural and do not
+// need a per-lane registry.
+func PatchLaneRootVisibility(src []byte) (out []byte, changed bool, err error) {
+	const marker = "// Sovereign Lane Surgeon: lane-root visibility."
+	if bytes.Contains(src, []byte(marker)) {
+		return src, false, nil
+	}
+	fset := token.NewFileSet()
+	f, err := parser.ParseFile(fset, "", src, parser.ParseComments)
+	if err != nil {
+		return nil, false, fmt.Errorf("parse: %w", err)
+	}
+	var earlyReturn *ast.ReturnStmt
+	for _, decl := range f.Decls {
+		fd, ok := decl.(*ast.FuncDecl)
+		if !ok || fd.Name.Name != "laneCanonicalPkgs" || fd.Body == nil {
+			continue
+		}
+		ast.Inspect(fd.Body, func(n ast.Node) bool {
+			if earlyReturn != nil {
+				return false
+			}
+			ifStmt, ok := n.(*ast.IfStmt)
+			if !ok || ifStmt.Body == nil {
+				return true
+			}
+			be, ok := ifStmt.Cond.(*ast.BinaryExpr)
+			if !ok || be.Op != token.LSS {
+				return true
+			}
+			left, lok := be.X.(*ast.Ident)
+			right, rok := be.Y.(*ast.BasicLit)
+			if !lok || !rok || left.Name != "slash" || right.Value != "0" {
+				return true
+			}
+			for _, stmt := range ifStmt.Body.List {
+				if rs, ok := stmt.(*ast.ReturnStmt); ok {
+					earlyReturn = rs
+					break
+				}
+			}
+			return false
+		})
+		break
+	}
+	if earlyReturn == nil {
+		return nil, false, fmt.Errorf("slash < 0 early return not found in laneCanonicalPkgs")
+	}
+	// earlyReturn.Pos points after the existing two tabs. Start without indentation and leave
+	// two trailing tabs for the original return statement.
+	block := marker + `
+		for _, root := range []string{"frameworks", "packages"} {
+			if strings.HasPrefix(pkg, root+"-") {
+				out = append(out, root)
+				break
+			}
+		}
+		`
+	off := fset.Position(earlyReturn.Pos()).Offset
+	out = append(append(append([]byte{}, src[:off]...), []byte(block)...), src[off:]...)
+	if _, err := parser.ParseFile(token.NewFileSet(), "", out, 0); err != nil {
+		return nil, false, fmt.Errorf("post-splice reparse failed: %w", err)
+	}
+	return out, true, nil
+}
+
+// PatchParentDirSuffixVisibility teaches laneCanonicalPkgs about a path-only rename applied to
+// the immediate parent beneath frameworks/base/packages or packages/apps. Root canonicalization
+// alone maps packages-holo2/apps/Settings_holo2 to packages/apps/Settings_holo2; this second,
+// narrowly-scoped transform maps that to packages/apps/Settings so stock descendants can consume
+// keep-name modules (notably inherited license modules with :__subpackages__ visibility).
+func PatchParentDirSuffixVisibility(src []byte, suffix string) (out []byte, changed bool, err error) {
+	if suffix == "" {
+		return src, false, nil
+	}
+	const marker = "// Sovereign Lane Surgeon: parent-directory suffix visibility."
+	if bytes.Contains(src, []byte(marker)) {
+		fset := token.NewFileSet()
+		f, err := parser.ParseFile(fset, "", src, parser.ParseComments)
+		if err != nil {
+			return nil, false, fmt.Errorf("parse: %w", err)
+		}
+		var lit *ast.CompositeLit
+		ast.Inspect(f, func(n ast.Node) bool {
+			rs, ok := n.(*ast.RangeStmt)
+			if !ok {
+				return true
+			}
+			id, ok := rs.Value.(*ast.Ident)
+			if !ok || id.Name != "parentSuffix" {
+				return true
+			}
+			lit, _ = rs.X.(*ast.CompositeLit)
+			return lit == nil
+		})
+		if lit == nil || len(lit.Elts) == 0 {
+			return nil, false, fmt.Errorf("parent-directory suffix registry not found")
+		}
+		for _, elem := range lit.Elts {
+			if bl, ok := elem.(*ast.BasicLit); ok && bl.Kind == token.STRING {
+				if value, e := strconv.Unquote(bl.Value); e == nil && value == suffix {
+					return src, false, nil
+				}
+			}
+		}
+		last := lit.Elts[len(lit.Elts)-1]
+		off := fset.Position(last.End()).Offset
+		ins := []byte(fmt.Sprintf(", %q", suffix))
+		out = append(append(append([]byte{}, src[:off]...), ins...), src[off:]...)
+		if _, err := parser.ParseFile(token.NewFileSet(), "", out, 0); err != nil {
+			return nil, false, fmt.Errorf("post-splice reparse failed: %w", err)
+		}
+		return out, true, nil
+	}
+
+	fset := token.NewFileSet()
+	f, err := parser.ParseFile(fset, "", src, parser.ParseComments)
+	if err != nil {
+		return nil, false, fmt.Errorf("parse: %w", err)
+	}
+	var finalReturn *ast.ReturnStmt
+	for _, decl := range f.Decls {
+		fd, ok := decl.(*ast.FuncDecl)
+		if !ok || fd.Name.Name != "laneCanonicalPkgs" || fd.Body == nil {
+			continue
+		}
+		ast.Inspect(fd.Body, func(n ast.Node) bool {
+			rs, ok := n.(*ast.ReturnStmt)
+			if !ok || len(rs.Results) != 1 {
+				return true
+			}
+			id, ok := rs.Results[0].(*ast.Ident)
+			if ok && id.Name == "out" && (finalReturn == nil || rs.Pos() > finalReturn.Pos()) {
+				finalReturn = rs
+			}
+			return true
+		})
+		break
+	}
+	if finalReturn == nil {
+		return nil, false, fmt.Errorf("final return out not found in laneCanonicalPkgs")
+	}
+	// finalReturn.Pos points at the `r` in `return`; src[:off] already contains the line's tab.
+	// Start the block without another tab, then leave one trailing tab for the original return.
+	block := fmt.Sprintf(`%s
+	parentCandidates := append([]string(nil), out...)
+	for _, parentSuffix := range []string{%q} {
+		for _, candidate := range parentCandidates {
+			parts := strings.Split(candidate, "/")
+			parent := -1
+			switch {
+			case len(parts) >= 4 && (parts[0] == "frameworks" || strings.HasPrefix(parts[0], "frameworks-")) && parts[1] == "base" && parts[2] == "packages":
+				parent = 3
+			case len(parts) >= 3 && (parts[0] == "packages" || strings.HasPrefix(parts[0], "packages-")) && parts[1] == "apps":
+				parent = 2
+			case len(parts) >= 2 && parts[0] == "apps":
+				parent = 1
+			}
+			if parent >= 0 && strings.HasSuffix(parts[parent], parentSuffix) {
+				parts[parent] = strings.TrimSuffix(parts[parent], parentSuffix)
+				out = append(out, strings.Join(parts, "/"))
+			}
+		}
+	}
+
+	`, marker, suffix)
+	off := fset.Position(finalReturn.Pos()).Offset
+	out = append(append(append([]byte{}, src[:off]...), []byte(block)...), src[off:]...)
+	if _, err := parser.ParseFile(token.NewFileSet(), "", out, 0); err != nil {
+		return nil, false, fmt.Errorf("post-splice reparse failed: %w", err)
+	}
+	return out, true, nil
 }
 
 // appendFrameworkResCase adds "framework-res-<lane>" to the case list of aar.go's

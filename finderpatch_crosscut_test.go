@@ -17,6 +17,8 @@ package main
 
 import (
 	"go/format"
+	"go/parser"
+	"go/token"
 	"strings"
 	"testing"
 )
@@ -75,6 +77,36 @@ func TestAppendSuffixToOtherLaneFunc(t *testing.T) {
 	out2, changed2, _ := appendSuffixToOtherLaneFunc(out, "isOtherLaneBp", "-aurora")
 	if changed2 || string(out2) != string(out) {
 		t.Error("second append should be a no-op")
+	}
+}
+
+func TestAppendSuffixSeedsFirstLaneWithoutExistingSiblingChain(t *testing.T) {
+	src := []byte(`package build
+
+import "strings"
+
+func isOtherLaneBpForHolo(bp string) bool {
+	if strings.HasPrefix(bp, "external/kotlinc-holo/") {
+		return false
+	}
+	return false
+}
+`)
+	out, changed, err := appendSuffixToOtherLaneFunc(src, "isOtherLaneBpForHolo", "-holo2")
+	if err != nil || !changed {
+		t.Fatalf("append = (%v, %v), want (changed, nil)", changed, err)
+	}
+	for _, want := range []string{`for _, comp := range strings.Split(bp, "/")`, `strings.HasSuffix(comp, "-holo2")`} {
+		if !strings.Contains(string(out), want) {
+			t.Fatalf("seeded first-lane predicate missing %q:\n%s", want, out)
+		}
+	}
+	if _, err := parser.ParseFile(token.NewFileSet(), "", out, 0); err != nil {
+		t.Fatalf("result does not parse: %v\n%s", err, out)
+	}
+	out2, changed2, err := appendSuffixToOtherLaneFunc(out, "isOtherLaneBpForHolo", "-holo2")
+	if err != nil || changed2 || string(out2) != string(out) {
+		t.Fatalf("second append should be idempotent: changed=%v err=%v", changed2, err)
 	}
 }
 

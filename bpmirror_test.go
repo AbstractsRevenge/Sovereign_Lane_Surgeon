@@ -136,6 +136,30 @@ func TestMirrorSkipsGit(t *testing.T) {
 	}
 }
 
+func TestMirrorRepointsRelativeSymlinkIntoSuffixedParent(t *testing.T) {
+	root := t.TempDir()
+	src := filepath.Join(root, "frameworks-holo", "overlays", "frameworks", "base", "packages", "SystemUI")
+	if err := os.MkdirAll(src, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink("../../../../../base/packages/SystemUI/res", filepath.Join(src, "res")); err != nil {
+		t.Fatal(err)
+	}
+	c := deriveLane("holo2", false, nil, false, false, "")
+	c.ParentDirSuffix = "_holo2"
+	if _, _, err := mirrorSubtree(c, root, "frameworks-holo"); err != nil {
+		t.Fatal(err)
+	}
+	target := filepath.Join(root, "frameworks-holo2", "overlays", "frameworks", "base", "packages", "SystemUI", "res")
+	got, err := os.Readlink(target)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got != "../../../../../base/packages/SystemUI_holo2/res" {
+		t.Fatalf("mapped link = %q", got)
+	}
+}
+
 // TestDefaultInfraExcludes: forking frameworks/base auto-excludes infra; keep-name adds SystemUI.
 func TestDefaultInfraExcludes(t *testing.T) {
 	keep := deriveLane("t1", true, nil, true, true, "")

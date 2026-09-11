@@ -372,6 +372,10 @@ func writeScaffold(c LaneConfig, outRoot string) int {
 			// because `frameworks/` is not a lane-scoped token: see relocateStockPathsInFile.
 			runRelocateStockSourcePaths(c, outRoot)
 		}
+		// Path-only rename model: the mirror has suffixed exactly the immediate package/app
+		// parents. Repoint rooted build references to those physical paths without changing any
+		// descendant directory, filename, Java namespace, or Blueprint module name.
+		runRewriteParentSuffixPaths(c, outRoot)
 		// rename model only (no-op for keep-name): tier 1 installables (+overrides), then tier 2
 		// libraries (rename + repoint every dep ref in lockstep).
 		runRenameInstallables(c, outRoot)
@@ -409,13 +413,17 @@ func writeScaffold(c LaneConfig, outRoot string) int {
 	if len(c.Forks) == 0 {
 		fmt.Printf("\nTIP: pass -fork frameworks/<subtree>,packages/<subtree> to clone stock subtrees into\n     frameworks-%s/ + packages-%s/ (keep-name — verbatim, no ref rewrite).\n", c.Name, c.Name)
 	}
-	if c.KeepName {
+	if keepsModuleNames(c) {
 		// forkCovers, not HasPrefix(f, "frameworks/base"): the old test asked whether the FORK
 		// ENTRY starts with the subtree, so a whole-root `-fork frameworks` — which clones
 		// frameworks/base by definition — matched nothing and printed this warning as a FALSE
 		// POSITIVE, telling the user to fork a framework-class that was already forked.
 		// (holo2test, 2026-08-20.)
-		if !forkCovers(c.Forks, "frameworks/base") {
+		forksFrameworkBase := forkCovers(c.Forks, "frameworks/base")
+		if c.FromLane != "" {
+			forksFrameworkBase = forksFrameworkBase || forkCovers(c.Forks, "frameworks-"+c.FromLane+"/base")
+		}
+		if !forksFrameworkBase {
 			fmt.Printf("\n⚠ KEEP-NAME: this lane's lunch enables the aar.go framework-class suppressors, which hide\n")
 			fmt.Printf("  stock framework-res/framework/services EXPECTING a lane replacement. You MUST fork the\n")
 			fmt.Printf("  framework-class (-fork frameworks/base) or a full build fails with 'framework-minus-apex\n")

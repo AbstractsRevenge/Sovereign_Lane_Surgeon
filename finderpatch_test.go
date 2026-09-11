@@ -121,6 +121,29 @@ func TestGenFinderModelAware(t *testing.T) {
 		}
 	}
 	mustParse(t, []byte("package p\n\n"+rblock))
+
+	parentSuffix := deriveLane("holo2", false, nil, true, true, "")
+	parentSuffix.ParentDirSuffix = "_holo2"
+	pblock, err := genFinderLaneFuncs(parentSuffix, []string{"-holo"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{
+		"func holo2StockParallel(bp string) string",
+		`const parentDirSuffix = "_holo2"`,
+		`parts[0] == "frameworks"`,
+		`parts[2] == "packages"`,
+		`parts[0] == "apps"`,
+		"toDrop[stock] = true",
+	} {
+		if !strings.Contains(pblock, want) {
+			t.Errorf("parent-suffix block missing %q", want)
+		}
+	}
+	if strings.Contains(pblock, "existingHolo2StockParallel") {
+		t.Error("parent-suffix lane used module-rename routing")
+	}
+	mustParse(t, []byte("package p\n\n"+pblock))
 }
 
 // TestInsertBeforeFunc: splice the generated funcs before a sibling; result parses; idempotent.

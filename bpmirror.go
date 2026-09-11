@@ -77,7 +77,7 @@ func defaultInfraExcludes(c LaneConfig) []string {
 	var ex []string
 	if forkCovers(c.Forks, "frameworks/base") {
 		ex = []string{"frameworks/base/ravenwood", "frameworks/base/tools/hoststubgen"}
-		if c.KeepName {
+		if keepsModuleNames(c) {
 			ex = append(ex, "frameworks/base/packages/SystemUI")
 		} else {
 			ex = append(ex, "frameworks/base/api")
@@ -395,7 +395,8 @@ func checkLaneSuffixCollision(outRoot, lane string) (offenders []string, total i
 			if base == ".git" || base == ".repo" || strings.HasPrefix(base, "out") && filepath.Dir(p) == outRoot {
 				return filepath.SkipDir
 			}
-			if base == ownFw || base == ownPkg {
+			if base == ownFw || base == ownPkg ||
+				(top == "device" && strings.HasPrefix(filepath.ToSlash(p), filepath.ToSlash(filepath.Join(outRoot, "device", "google"))+"/") && strings.HasSuffix(base, suffix)) {
 				return filepath.SkipDir
 			}
 			if strings.HasSuffix(base, suffix) {
@@ -434,24 +435,59 @@ func laneDirFor(srcSubtree, lane string) (laneRel string, ok bool) {
 	return "", false
 }
 
-// mapPrefixedPath applies the DirPrefix to the top-level app/package directory in the path.
+// mapPrefixedPath applies the configured identity transform to the immediate app/package parent.
+// It accepts stock roots and lane-source roots so create -from performs the same physical mapping.
 func mapPrefixedPath(c LaneConfig, stockPath string) string {
-	if c.DirPrefix == "" {
+	if c.DirPrefix == "" && c.ParentDirSuffix == "" {
 		return stockPath
 	}
 	parts := strings.Split(filepath.ToSlash(stockPath), "/")
 	prefixIndex := -1
-	if len(parts) >= 3 && parts[0] == "packages" && parts[1] == "apps" {
+	packagesRoot := len(parts) > 0 && (parts[0] == "packages" || strings.HasPrefix(parts[0], "packages-"))
+	frameworksRoot := len(parts) > 0 && (parts[0] == "frameworks" || strings.HasPrefix(parts[0], "frameworks-"))
+	if len(parts) >= 3 && packagesRoot && parts[1] == "apps" {
 		prefixIndex = 2
-	} else if len(parts) >= 4 && parts[0] == "frameworks" && parts[1] == "base" && parts[2] == "packages" {
+	} else if len(parts) >= 4 && frameworksRoot && parts[1] == "base" && parts[2] == "packages" {
 		prefixIndex = 3
 	}
 	if prefixIndex != -1 && prefixIndex < len(parts) {
-		if !strings.HasPrefix(strings.ToLower(parts[prefixIndex]), strings.ToLower(c.DirPrefix)) {
+		if c.ParentDirSuffix != "" && !strings.HasSuffix(parts[prefixIndex], c.ParentDirSuffix) {
+			parts[prefixIndex] += c.ParentDirSuffix
+		} else if c.DirPrefix != "" && !strings.HasPrefix(strings.ToLower(parts[prefixIndex]), strings.ToLower(c.DirPrefix)) {
 			parts[prefixIndex] = c.DirPrefix + parts[prefixIndex]
 		}
 	}
 	return filepath.Join(parts...)
+}
+
+// mapLaneSymlinkTarget applies the physical parent transform to a symlink's resolved lane path,
+// then returns an equivalent link relative to the target location. Relative overlay links such as
+// frameworks-<lane>/overlays/.../SystemUI/res otherwise keep pointing at the now-absent
+// base/packages/SystemUI after that parent becomes SystemUI_holo2.
+func mapLaneSymlinkTarget(c LaneConfig, outRoot, target, link string) string {
+	if c.ParentDirSuffix == "" {
+		return link
+	}
+	resolved := link
+	if !filepath.IsAbs(resolved) {
+		resolved = filepath.Join(filepath.Dir(target), resolved)
+	}
+	rel, err := filepath.Rel(outRoot, filepath.Clean(resolved))
+	if err != nil || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
+		return link
+	}
+	mapped := mapPrefixedPath(c, rel)
+	if mapped == rel {
+		return link
+	}
+	if filepath.IsAbs(link) {
+		return filepath.Join(outRoot, mapped)
+	}
+	newLink, err := filepath.Rel(filepath.Dir(target), filepath.Join(outRoot, mapped))
+	if err != nil {
+		return link
+	}
+	return newLink
 }
 
 // mirrorSubtree recursively clones outRoot/<stockSubtree> → outRoot/<lane-parallel>, verbatim,
@@ -510,8 +546,15 @@ func mirrorSubtree(c LaneConfig, outRoot, stockSubtree string) (laneRel string, 
 			if lerr != nil {
 				return nil
 			}
+			link = mapLaneSymlinkTarget(c, outRoot, target, link)
 			if _, serr := os.Lstat(target); serr == nil {
-				return nil // no-clobber
+				existing, readErr := os.Readlink(target)
+				if readErr != nil || existing == link {
+					return nil // no-clobber, or already correct
+				}
+				if removeErr := os.Remove(target); removeErr != nil {
+					return removeErr
+				}
 			}
 			if merr := os.MkdirAll(filepath.Dir(target), 0o755); merr != nil {
 				return merr

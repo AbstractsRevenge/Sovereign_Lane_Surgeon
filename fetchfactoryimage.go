@@ -135,6 +135,18 @@ var factoryImageManifest = []factoryImageEntry{
 	{Device: "komodo", Build: "CP2A.260805.005.A1", URL: "https://dl.google.com/dl/android/aosp/komodo-cp2a.260805.005.a1-factory-40742477.zip", SHA256: "40742477715f15f4c10aae42022b4fbff877c9b5dc85902b1c9217576bad41d4"},
 	{Device: "comet", Build: "CP2A.260805.005.A1", URL: "https://dl.google.com/dl/android/aosp/comet-cp2a.260805.005.a1-factory-450cf07a.zip", SHA256: "450cf07ae02151a9a9cc30aebe32757e3a48fe9a67d18aa6df291d28dd83fba7"},
 	{Device: "tegu", Build: "CP2A.260805.005", URL: "https://dl.google.com/dl/android/aosp/tegu-cp2a.260805.005-factory-a3582e12.zip", SHA256: "a3582e120cf59e54ffbbe7a9d430987dd4d9ffb3ce691f9003724d80d4545026"},
+
+	// ─── Android 16 cp1a (select with -release cp1a) ───
+	// Read from the page's table after its Acknowledge gate on 2026-09-26: each device's latest
+	// CP1A build without a carrier or region suffix (the page also lists .A1/.B1 Telia/Australia
+	// variants). Every CP1A row on the page had the first 8 hex digits of its SHA-256 in its file
+	// name, and TestFactoryImageManifestChecksumsMatchFileNames holds every row here to that.
+	{Device: "lynx", Build: "CP1A.260505.005", URL: "https://dl.google.com/dl/android/aosp/lynx-cp1a.260505.005-factory-743f0f8f.zip", SHA256: "743f0f8f1d725f9f27f6cdd357017bf25e52069c6ffb6ccf5b7685b072f5cdb1"},
+	{Device: "panther", Build: "CP1A.260405.005", URL: "https://dl.google.com/dl/android/aosp/panther-cp1a.260405.005-factory-3d3f2f42.zip", SHA256: "3d3f2f421c974c338ce89707dde79c205a8a53b0ca060f10545e468f228508a9"},
+	{Device: "cheetah", Build: "CP1A.260405.005", URL: "https://dl.google.com/dl/android/aosp/cheetah-cp1a.260405.005-factory-5a146f83.zip", SHA256: "5a146f83754a553716a4c344a9bfcd77b8c6a2a461405a6cc126e85eff105903"},
+	{Device: "tangorpro", Build: "CP1A.260505.005", URL: "https://dl.google.com/dl/android/aosp/tangorpro-cp1a.260505.005-factory-75e3f7d4.zip", SHA256: "75e3f7d4bbe3a5e2648ee1f79c0f5d4231021cf0a1bda142724536d1d4713660"},
+	{Device: "akita", Build: "CP1A.260505.005", URL: "https://dl.google.com/dl/android/aosp/akita-cp1a.260505.005-factory-4790ccab.zip", SHA256: "4790ccab36733ed5a934810fa4375749a1e29aeab56577e97c5477a5381a224c"},
+	{Device: "oriole", Build: "CP1A.260405.005", URL: "https://dl.google.com/dl/android/aosp/oriole-cp1a.260405.005-factory-8081a8ba.zip", SHA256: "8081a8ba182a6ae60b155b03c1843fe8dabe285868147cdf9b08c45f458560de"},
 }
 
 func lookupFactoryImage(device string) (factoryImageEntry, bool) {
@@ -146,12 +158,64 @@ func lookupFactoryImage(device string) (factoryImageEntry, bool) {
 	return factoryImageEntry{}, false
 }
 
+// lookupFactoryImageRelease picks the manifest entry for device whose build belongs to release
+// (the build id's first token: CP1A.260505.005 → cp1a). An empty release keeps the original
+// behaviour, the device's first entry. More than one entry per (device, release) is refused
+// rather than resolved by order.
+func lookupFactoryImageRelease(device, release string) (factoryImageEntry, error) {
+	var builds []string
+	var hits []factoryImageEntry
+	for _, e := range factoryImageManifest {
+		if e.Device != device {
+			continue
+		}
+		builds = append(builds, e.Build)
+		if release == "" || strings.EqualFold(factoryBuildRelease(e.Build), release) {
+			hits = append(hits, e)
+		}
+	}
+	switch {
+	case len(builds) == 0:
+		return factoryImageEntry{}, fmt.Errorf("%q is not in the manifest (known: %s)", device, knownFactoryImageDevices())
+	case len(hits) == 0:
+		return factoryImageEntry{}, fmt.Errorf("%s has no %s build in the manifest (have: %s)", device, release, strings.Join(builds, ", "))
+	case release != "" && len(hits) > 1:
+		return factoryImageEntry{}, fmt.Errorf("%s has %d %s builds in the manifest; list one per release", device, len(hits), release)
+	}
+	return hits[0], nil
+}
+
+// factoryBuildRelease returns the release token of a build id: "CP1A.260505.005" → "cp1a".
+func factoryBuildRelease(build string) string {
+	return strings.ToLower(strings.SplitN(build, ".", 2)[0])
+}
+
 func knownFactoryImageDevices() string {
+	seen := map[string]bool{}
 	names := make([]string, 0, len(factoryImageManifest))
 	for _, e := range factoryImageManifest {
-		names = append(names, e.Device)
+		if !seen[e.Device] {
+			seen[e.Device] = true
+			names = append(names, e.Device)
+		}
 	}
 	return strings.Join(names, ", ")
+}
+
+// ensureDownloaded leaves a checksum-verified copy of url at zipPath. A copy already there that
+// verifies is reused without touching the network: a Range request past the end of a complete
+// file gets HTTP 416, which downloadWithResume reports as an error. A partial copy is resumed.
+func ensureDownloaded(url, sha256Hex, zipPath string) (reused bool, err error) {
+	if fi, statErr := os.Stat(zipPath); statErr == nil && fi.Mode().IsRegular() && verifySHA256(zipPath, sha256Hex) == nil {
+		return true, nil
+	}
+	if err := downloadWithResume(url, zipPath); err != nil {
+		return false, fmt.Errorf("download: %w", err)
+	}
+	if err := verifySHA256(zipPath, sha256Hex); err != nil {
+		return false, err
+	}
+	return false, nil
 }
 
 // ─── End v0.4.0 enhancement ───
@@ -167,7 +231,8 @@ func cmdFetchFactoryImage(args []string) int {
 	out := fs.String("out", "", "directory to extract into — writes <out>/<device>/, drop-in compatible with `create -stock -factory-images-root <out>`")
 	cacheDir := fs.String("cache-dir", "", "where to download the factory zip (default: <out>/.factory-image-cache)")
 	acceptTerms := fs.Bool("i-accept-google-terms", false, "accept Google's factory-image terms non-interactively (for scripted use — read them first: run without this flag once)")
-	keepZip := fs.Bool("keep-zip", false, "keep the downloaded/intermediate zips after extraction (default: delete — saves ~4GB/device)")
+	release := fs.String("release", "", "pick the device's build for this release (the build id's first token, e.g. cp1a for CP1A.260505.005); default: the device's first manifest entry")
+	keepZip := fs.Bool("keep-zip", false, "keep the downloaded/intermediate zips after extraction (default: delete — saves ~4GB/device; a zip that was already in -cache-dir is never deleted)")
 	extractVendor := fs.Bool("extract-vendor", true, "extract vendor.img and vendor_dlkm.img contents into vendor/google_devices/<device>/ (default: true)")
 	_ = fs.Parse(args)
 
@@ -175,9 +240,9 @@ func cmdFetchFactoryImage(args []string) int {
 		fmt.Fprintln(os.Stderr, "fetch-factory-image: -device <name> and -out <dir> are required")
 		return 2
 	}
-	entry, ok := lookupFactoryImage(*device)
-	if !ok {
-		fmt.Fprintf(os.Stderr, "fetch-factory-image: %q is not in the manifest (known: %s)\n", *device, knownFactoryImageDevices())
+	entry, lerr := lookupFactoryImageRelease(*device, *release)
+	if lerr != nil {
+		fmt.Fprintln(os.Stderr, "fetch-factory-image:", lerr)
 		return 2
 	}
 	if !confirmGoogleTerms(*acceptTerms) {
@@ -195,16 +260,16 @@ func cmdFetchFactoryImage(args []string) int {
 	zipPath := filepath.Join(*cacheDir, filepath.Base(entry.URL))
 
 	fmt.Printf("Fetching %s %s from %s\n", entry.Device, entry.Build, entry.URL)
-	if err := downloadWithResume(entry.URL, zipPath); err != nil {
-		fmt.Fprintln(os.Stderr, "fetch-factory-image: download:", err)
+	reused, derr := ensureDownloaded(entry.URL, entry.SHA256, zipPath)
+	if derr != nil {
+		fmt.Fprintln(os.Stderr, "fetch-factory-image:", derr)
 		return 1
 	}
-	fmt.Println("Verifying SHA-256...")
-	if err := verifySHA256(zipPath, entry.SHA256); err != nil {
-		fmt.Fprintln(os.Stderr, "fetch-factory-image:", err)
-		return 1
+	if reused {
+		fmt.Printf("Already downloaded: %s (checksum OK)\n", zipPath)
+	} else {
+		fmt.Println("Checksum OK.")
 	}
-	fmt.Println("Checksum OK.")
 
 	deviceOut := filepath.Join(*out, entry.Device)
 	if err := os.MkdirAll(deviceOut, 0o755); err != nil {
@@ -228,7 +293,9 @@ func cmdFetchFactoryImage(args []string) int {
 	}
 	if !*keepZip {
 		os.Remove(innerZip)
-		os.Remove(zipPath)
+		if !reused {
+			os.Remove(zipPath)
+		}
 		fmt.Println("Removed intermediate zip(s) (pass -keep-zip to retain them).")
 	}
 

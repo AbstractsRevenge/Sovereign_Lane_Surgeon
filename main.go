@@ -184,10 +184,13 @@ SUBCOMMANDS:
                                into each lane device product — leaving stock PRISTINE. Preview unless -apply.
                                Doubles as the drift-guard: re-run after any lane apex change.
   doctor  -report <dir|json>   Per classified failure, print (or apply) its recipe (§23.2).
-  fetch-factory-image -device <name> -out <dir>  Download+extract a Google Pixel factory image
-                               (known: the 16 cp2a devices with an AOSP tree — Pixel 6 … Pixel 9a) from a hand-verified
+  fetch-factory-image -device <name> -out <dir> [-release <rel>]  Download+extract a Google Pixel factory image
+                               (known: the 16 cp2a devices with an AOSP tree — Pixel 6 … Pixel 9a — plus
+                               cp1a builds for lynx, panther, cheetah, tangorpro, akita, oriole; -release picks
+                               one, default the device's cp2a build) from a hand-verified
                                manifest of real dl.google.com URLs + SHA-256 checksums (NOT a live
-                               scrape — see fetchfactoryimage.go for why). Prints Google's real
+                               scrape — see fetchfactoryimage.go for why). A zip already in -cache-dir
+                               that matches its checksum is reused, and never deleted. Prints Google's real
                                terms and REFUSES to download until accepted ("I agree", or
                                -i-accept-google-terms for scripted use). Writes <out>/<device>/,
                                drop-in compatible with create -stock -factory-images-root <out>.

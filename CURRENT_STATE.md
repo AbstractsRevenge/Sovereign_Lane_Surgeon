@@ -212,7 +212,7 @@ runtime-install and boot-jar machinery attached, taken deliberately rather than 
 | Full `m droid` validation | ✅ Done | cheetah booted 2026-09-03 |
 | `doctor` auto-apply | 🟡 Medium | Automated fix application from audit |
 | Kernel prebuilt fetch | ✅ Done | `assemble-kernel` from the factory image (v0.4.0) |
-| Android 16 support | 🟡 In progress | BP4A lane-product generation is implemented; physical-device and Holo build validation remain |
+| Android 16 support | 🟡 In progress | Release-specific lane-product generation (`-release cp1a`) and the six CP1A factory images in `fetch-factory-image` are implemented; physical-device and Holo build validation remain |
 | Additional devices | ✅ Done (analysis gate) | all 16 cp2a devices with an AOSP tree; full builds for zuma/zumapro families on demand |
 | Docker/container support | 🟢 Low | Root-free path exists now (debugfs); containerizing is what remains |
 

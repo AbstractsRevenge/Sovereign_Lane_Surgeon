@@ -26,7 +26,7 @@ active limitations remain in [CURRENT_STATE.md](CURRENT_STATE.md).
 
 - Added scoped `repair-lane` so existing lanes can receive the same target-stock Kotlin source
   parity that `create` applies to new lanes without reprinting unrelated Blueprints.
-- Added release-specific lane lunches through `-release`, including Android 16 r4 BP4A products.
+- Added release-specific lane lunches through `-release`, including Android 16 r4 products.
 - Added path-only immediate-parent suffixing through
   `-rename -suffix-parent-dirs <suffix>`. Descendant paths and module names remain unchanged.
 - Added complete source-lane device inheritance for `create -from`, preserving curated packages,

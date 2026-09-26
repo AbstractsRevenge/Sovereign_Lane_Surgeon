@@ -77,7 +77,7 @@ func TestLookupFactoryImageRelease(t *testing.T) {
 			t.Errorf("%s with no -release: got %q, %v; want its cp2a entry", dev, e.Build, err)
 		}
 	}
-	if _, err := lookupFactoryImageRelease("lynx", "bp4a"); err == nil || !strings.Contains(err.Error(), "CP1A.260505.005") {
+	if _, err := lookupFactoryImageRelease("lynx", "bp1a"); err == nil || !strings.Contains(err.Error(), "CP1A.260505.005") {
 		t.Errorf("a release the manifest lacks must fail and list what it has: %v", err)
 	}
 	if _, err := lookupFactoryImageRelease("not-a-real-device", "cp1a"); err == nil {

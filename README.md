@@ -76,11 +76,12 @@ working lane exists before you have edited a file.
 ```
 
 Lane device lunches default to Android 15's `bp1a`. For another platform release,
-select it explicitly; for Android 16 r4, use `-release bp4a` and the generated device
-products will register `aosp_<device>_<lane>-bp4a-{eng,userdebug,user}`.
+select it explicitly; for Android 16, use `-release cp1a` (the build the devices' factory images
+carry) and the generated device products will register `aosp_<device>_<lane>-cp1a-{eng,userdebug,user}`.
+The r4 source tree has no `cp1a` release config: add one inheriting its newest config before you lunch.
 
 ```bash
-./sovereign-lane-surgeon create -name holo -devices cheetah -release bp4a \
+./sovereign-lane-surgeon create -name holo -devices cheetah -release cp1a \
     -out /home/abstractsrevenge/AOSP_Workspace/android-16.0.0_r4
 ```
 

@@ -51,7 +51,7 @@ type LaneConfig struct {
 	KernelVersion     string   // set TARGET_LINUX_KERNEL_VERSION to this in every mirrored device's product mk(s)
 	HWSubtrees        []string // non-device subtrees to mirror verbatim (e.g. hardware/google/gchips)
 	FactoryImagesRoot string   // parent dir of per-device factory-image extraction dirs (<root>/<device>/...), for vendor blob wiring
-	Release           string   // target release config (e.g. bp4a/cp2a) — used by lane lunches and stock kernel assembly
+	Release           string   // target release config (e.g. cp1a/cp2a) — used by lane lunches and stock kernel assembly
 }
 
 // keepsModuleNames reports whether the lane's Blueprint module identities remain stock-shaped.

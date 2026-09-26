@@ -73,7 +73,7 @@ func TestGenDeviceProduct(t *testing.T) {
 
 func TestGenDeviceProductUsesTargetRelease(t *testing.T) {
 	cfg := deriveLane("holo", true, []string{"cheetah"}, false, false, "")
-	cfg.Release = "bp4a"
+	cfg.Release = "cp1a"
 	_, content, err := genDeviceProduct(cfg, deviceResolution{
 		Product: "cheetah", ProductTitle: "Cheetah", Family: "pantah", SoC: "gs201", Resolved: true,
 	}, androidProductsMkTmpl, "AndroidProducts.mk")
@@ -81,23 +81,23 @@ func TestGenDeviceProductUsesTargetRelease(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, want := range []string{
-		"aosp_cheetah_holo-bp4a-userdebug",
-		"aosp_cheetah_holo-bp4a-user",
-		"aosp_cheetah_holo-bp4a-eng",
+		"aosp_cheetah_holo-cp1a-userdebug",
+		"aosp_cheetah_holo-cp1a-user",
+		"aosp_cheetah_holo-cp1a-eng",
 	} {
 		if !strings.Contains(content, want) {
 			t.Errorf("generated AndroidProducts.mk missing %q", want)
 		}
 	}
 	if strings.Contains(content, "-bp1a-") {
-		t.Error("BP4A generation leaked the Android 15 BP1A release config")
+		t.Error("CP1A generation leaked the Android 15 BP1A release config")
 	}
 }
 
 func TestRegisterDeviceProductAddsNewReleaseToExistingProduct(t *testing.T) {
 	root := t.TempDir()
 	cfg := deriveLane("holo", true, []string{"cheetah"}, false, false, "")
-	cfg.Release = "bp4a"
+	cfg.Release = "cp1a"
 	res := deviceResolution{Product: "cheetah", ProductTitle: "Cheetah", Family: "pantah", SoC: "gs201", Resolved: true}
 	dir := filepath.Join(root, "device", "google", "pantah-holo")
 	if err := os.MkdirAll(dir, 0o755); err != nil {
@@ -115,7 +115,7 @@ func TestRegisterDeviceProductAddsNewReleaseToExistingProduct(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, want := range []string{"-bp4a-userdebug", "-bp4a-user", "-bp4a-eng"} {
+	for _, want := range []string{"-cp1a-userdebug", "-cp1a-user", "-cp1a-eng"} {
 		if !strings.Contains(string(content), want) {
 			t.Errorf("updated AndroidProducts.mk missing %q", want)
 		}

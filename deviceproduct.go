@@ -44,7 +44,7 @@ type devTmplData struct {
 	Family       string // "pantah" (device/google/ folder; == Product for lynx/tangorpro)
 	SoC          string // "gs201" — auto-derived; "" ⇒ emits a TODO
 	Rename       bool   // rename/app-naming model (DirPrefix set) — emits the keep-name-stub app allowlist
-	Release      string // AOSP release config used in lunch choices ("bp1a", "bp4a", ...)
+	Release      string // AOSP release config used in lunch choices ("bp1a", "cp1a", ...)
 }
 
 // laneRelease preserves the Android 15 behavior for existing callers while allowing
